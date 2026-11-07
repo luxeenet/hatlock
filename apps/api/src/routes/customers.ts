@@ -1,0 +1,110 @@
+// Customer Management Routes
+// Customer registration, KYC records, and agreement mapping
+
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
+import { prisma } from '../lib/prisma.js';
+
+const CustomerCreateSchema = z.object({
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  email: z.string().email(),
+  phone: z.string().min(7),
+  idNumber: z.string().min(4),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  country: z.string().default('KE'),
+  notes: z.string().optional()
+});
+
+export async function customerRoutes(server: FastifyInstance) {
+  server.addHook('preHandler', server.authenticate);
+
+  // List customers for tenant
+  server.get('/', {
+    schema: {
+      tags: ['Customers'],
+      summary: 'List customers for current business'
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const businessId = (request as any).businessId;
+    const customers = await prisma.customer.findMany({
+      where: { businessId },
+      include: {
+        _count: {
+          select: {
+            financingAgreements: true,
+            rentalAgreements: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return reply.send({ customers });
+  });
+
+  // Create customer
+  server.post('/', {
+    schema: {
+      tags: ['Customers'],
+      summary: 'Register a new customer'
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const businessId = (request as any).businessId;
+    const parse = CustomerCreateSchema.safeParse(request.body);
+    if (!parse.success) {
+      return reply.status(400).send({ error: 'VALIDATION_ERROR', details: parse.error.flatten() });
+    }
+
+    const { idNumber, notes, country, ...rest } = parse.data;
+    const customer = await prisma.customer.create({
+      data: {
+        ...rest,
+        nationalId: idNumber,
+        businessId
+      }
+    });
+
+    return reply.status(201).send({ customer });
+  });
+
+  // Get customer detail
+  server.get('/:customerId', {
+    schema: {
+      tags: ['Customers'],
+      summary: 'Get customer profile with active agreements and devices'
+    }
+  }, async (request: FastifyRequest<{ Params: { customerId: string } }>, reply: FastifyReply) => {
+    const businessId = (request as any).businessId;
+    const { customerId } = request.params;
+
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, businessId },
+      include: {
+        financingAgreements: {
+          include: {
+            device: true,
+            instalments: { orderBy: { instalmentNumber: 'asc' } }
+          }
+        },
+        rentalAgreements: {
+          include: {
+            device: true,
+            rentalCharges: { orderBy: { chargeNumber: 'asc' } }
+          }
+        },
+        paymentTransactions: {
+          orderBy: { createdAt: 'desc' },
+          take: 20
+        }
+      }
+    });
+
+    if (!customer) {
+      return reply.status(404).send({ error: 'CUSTOMER_NOT_FOUND', message: 'Customer does not exist' });
+    }
+
+    return reply.send({ customer });
+  });
+}

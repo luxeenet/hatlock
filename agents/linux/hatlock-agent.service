@@ -1,0 +1,23 @@
+[Unit]
+Description=HatLock Device Protection and Financing Agent (Luxeenet)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/local/bin/hatlock-agent
+Restart=always
+RestartSec=10
+EnvironmentFile=-/etc/hatlock/agent.env
+StandardOutput=journal
+StandardError=journal
+
+# Security sandbox
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/var/lib/hatlock /var/run
+
+[Install]
+WantedBy=multi-user.target

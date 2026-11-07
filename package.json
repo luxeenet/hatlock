@@ -1,0 +1,31 @@
+{
+  "name": "hatlock",
+  "version": "1.0.0",
+  "description": "HatLock by Luxeenet - Enterprise Laptop Financing, Hire Purchase, Rental & Device Protection SaaS",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "apps/customer-portal",
+    "packages/shared",
+    "packages/database",
+    "packages/hatpesa"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=apps/api\" \"npm run dev --workspace=apps/web\" \"npm run dev --workspace=apps/customer-portal\"",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:migrate": "npm run migrate --workspace=packages/database",
+    "db:generate": "npm run generate --workspace=packages/database",
+    "db:seed": "npm run seed --workspace=packages/database",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  }
+}

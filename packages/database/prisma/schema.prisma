@@ -1,0 +1,1425 @@
+// This is your Prisma schema file
+// HatLock by Luxeenet — Complete Database Schema
+// Supports: Hire Purchase (ownership transfer) + Rental (business retains ownership)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  SUPER_ADMIN      // Luxeenet platform admin
+  BUSINESS_OWNER
+  BUSINESS_ADMIN
+  BUSINESS_EMPLOYEE
+  CUSTOMER
+}
+
+enum BusinessStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
+enum SubscriptionPlan {
+  STARTER
+  BUSINESS
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  TRIALING
+}
+
+enum DeviceStatus {
+  PENDING_ENROLLMENT
+  AVAILABLE
+  ACTIVE
+  PAYMENT_DUE
+  GRACE_PERIOD
+  RESTRICTED
+  PAYMENT_VERIFICATION
+  UNLOCK_PENDING
+  RETURN_PENDING
+  RECOVERY_REQUIRED
+  RETURNED
+  INSPECTION_REQUIRED
+  MAINTENANCE
+  OWNERSHIP_TRANSFER_PENDING
+  CUSTOMER_OWNED
+  RETIRED
+}
+
+enum DeviceOS {
+  WINDOWS
+  LINUX
+  UNKNOWN
+}
+
+enum ProtectionLevel {
+  STANDARD
+  ADVANCED
+  NONE
+}
+
+enum AgreementType {
+  HIRE_PURCHASE
+  RENTAL
+}
+
+enum HirePurchaseStatus {
+  DRAFT
+  PENDING_APPROVAL
+  ACTIVE
+  PAYMENT_DUE
+  OVERDUE
+  GRACE_PERIOD
+  RESTRICTED
+  PAYMENT_VERIFICATION
+  UNLOCK_PENDING
+  EARLY_SETTLEMENT_PENDING
+  SETTLEMENT_PENDING
+  COMPLETED
+  OWNERSHIP_TRANSFER_PENDING
+  OWNERSHIP_TRANSFERRED
+  DEFAULTED
+  TERMINATED
+  CANCELLED
+}
+
+enum RentalStatus {
+  DRAFT
+  PENDING_APPROVAL
+  ACTIVE
+  PAYMENT_DUE
+  OVERDUE
+  GRACE_PERIOD
+  RESTRICTED
+  PAYMENT_VERIFICATION
+  UNLOCK_PENDING
+  RENEWAL_PENDING
+  EXPIRING
+  EXPIRED
+  RETURN_PENDING
+  RETURNED
+  INSPECTION_REQUIRED
+  COMPLETED
+  TERMINATED
+  CANCELLED
+}
+
+enum PaymentFrequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
+  CUSTOM
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVERSED
+  DISPUTED
+  REFUNDED
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  FAILED
+  DISPUTED
+}
+
+enum ReconciliationStatus {
+  PENDING
+  RECONCILED
+  DISCREPANCY
+  WRITTEN_OFF
+}
+
+enum LedgerEntryType {
+  DEPOSIT
+  DOWN_PAYMENT
+  INSTALMENT
+  RENTAL_CHARGE
+  LATE_FEE
+  FINANCING_CHARGE
+  SECURITY_DEPOSIT
+  REFUND
+  DEPOSIT_RETURN
+  DISCOUNT
+  ADVANCE_PAYMENT
+  EARLY_SETTLEMENT
+  CORRECTION
+  REVERSAL
+  WRITE_OFF
+}
+
+enum CommandType {
+  RESTRICT
+  UNRESTRICT
+  HEARTBEAT_REQUEST
+  UPDATE
+  REVOKE
+  RE_ENROLL
+  SHUTDOWN_WARNING
+}
+
+enum CommandStatus {
+  PENDING
+  DELIVERED
+  EXECUTED
+  FAILED
+  EXPIRED
+  CANCELLED
+}
+
+enum RestrictionType {
+  OVERLAY_LOCK    // Full-screen overlay showing payment info
+  LOGIN_BLOCK     // Block login (Linux PAM / Windows logon)
+  SOFT_LOCK       // Frequent popups + restricted features
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  READ
+}
+
+enum ReturnStatus {
+  REQUESTED
+  NOTIFIED
+  OVERDUE
+  COLLECTED
+  INSPECTED
+  COMPLETED
+  DISPUTED
+}
+
+enum InspectionResult {
+  PASS
+  PASS_WITH_MINOR_DAMAGE
+  FAIL_SIGNIFICANT_DAMAGE
+  FAIL_MISSING_ACCESSORIES
+  FAIL_LOST
+}
+
+enum OwnershipType {
+  BUSINESS      // Business owns (always true during financing/rental)
+  CUSTOMER      // Customer owns (only after verified HP completion)
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  VIEW
+  APPROVE
+  REJECT
+  SUSPEND
+  RESTORE
+  RESTRICT
+  UNRESTRICT
+  TRANSFER_OWNERSHIP
+  ENROLL_DEVICE
+  ISSUE_COMMAND
+  LOGIN
+  LOGOUT
+  MFA_ENABLE
+  MFA_DISABLE
+  EXPORT
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+// ============================================================
+// USERS & AUTHENTICATION
+// ============================================================
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  phone             String?
+  passwordHash      String
+  role              UserRole
+  isActive          Boolean   @default(true)
+  mfaEnabled        Boolean   @default(false)
+  mfaSecret         String?   // Encrypted TOTP secret
+  emailVerified     Boolean   @default(false)
+  emailVerifiedAt   DateTime?
+  lastLoginAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  employee          Employee?
+  customer          Customer?
+  refreshTokens     RefreshToken[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]     @relation("ActorAuditLogs")
+  supportTickets    SupportTicket[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  userId      String
+  tokenHash   String    @unique  // SHA-256 of the actual token
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  ipAddress   String?
+  userAgent   String?
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+// ============================================================
+// BUSINESSES & TENANCY
+// ============================================================
+
+model Business {
+  id                  String          @id @default(uuid())
+  name                String
+  registrationNumber  String?         @unique
+  taxNumber           String?
+  email               String
+  phone               String
+  address             String?
+  city                String?
+  country             String          @default("Tanzania")
+  logoUrl             String?
+  status              BusinessStatus  @default(PENDING_VERIFICATION)
+  verifiedAt          DateTime?
+  verifiedBy          String?         // Super-admin user ID
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  // Relations
+  branches            Branch[]
+  employees           Employee[]
+  customers           Customer[]
+  devices             Device[]
+  financingAgreements FinancingAgreement[]
+  rentalAgreements    RentalAgreement[]
+  paymentTransactions PaymentTransaction[]
+  subscription        Subscription?
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+  supportTickets      SupportTicket[]
+
+  @@index([status])
+}
+
+model Branch {
+  id          String    @id @default(uuid())
+  businessId  String
+  name        String
+  address     String?
+  phone       String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  business              Business              @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  employees             Employee[]
+  devices               Device[]
+  financingAgreements   FinancingAgreement[]
+  rentalAgreements      RentalAgreement[]
+
+  @@index([businessId])
+}
+
+model Employee {
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  businessId  String
+  branchId    String?
+  firstName   String
+  lastName    String
+  position    String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  branch      Branch?   @relation(fields: [branchId], references: [id])
+  roles       EmployeeRole[]
+
+  @@index([businessId])
+  @@index([branchId])
+}
+
+model Role {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  businessId  String?   // null = global role (super-admin)
+  isSystem    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  permissions RolePermission[]
+  employees   EmployeeRole[]
+
+  @@unique([name, businessId])
+}
+
+model Permission {
+  id          String    @id @default(uuid())
+  resource    String    // e.g., "devices", "agreements", "payments"
+  action      String    // e.g., "create", "read", "update", "delete", "approve"
+  description String?
+
+  roles       RolePermission[]
+
+  @@unique([resource, action])
+}
+
+model RolePermission {
+  roleId        String
+  permissionId  String
+
+  role          Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission    Permission  @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model EmployeeRole {
+  employeeId  String
+  roleId      String
+  grantedAt   DateTime  @default(now())
+  grantedBy   String?
+
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  role        Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, roleId])
+}
+
+// ============================================================
+// SUBSCRIPTIONS
+// ============================================================
+
+model Plan {
+  id                String            @id @default(uuid())
+  name              String            @unique
+  plan              SubscriptionPlan
+  description       String?
+  monthlyPriceTZS   Decimal           @db.Decimal(14, 2)
+  annualPriceTZS    Decimal           @db.Decimal(14, 2)
+  maxDevices        Int
+  maxBranches       Int               @default(1)
+  maxEmployees      Int               @default(5)
+  features          Json              // Feature flags
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  subscriptions     Subscription[]
+}
+
+model Subscription {
+  id              String              @id @default(uuid())
+  businessId      String              @unique
+  planId          String
+  status          SubscriptionStatus  @default(TRIALING)
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelledAt     DateTime?
+  trialEndsAt     DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  business        Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  plan            Plan                @relation(fields: [planId], references: [id])
+  invoices        Invoice[]
+
+  @@index([businessId])
+  @@index([status])
+}
+
+model Invoice {
+  id              String    @id @default(uuid())
+  subscriptionId  String
+  amount          Decimal   @db.Decimal(14, 2)
+  currency        String    @default("TZS")
+  status          String    // draft, open, paid, void, uncollectible
+  dueDate         DateTime
+  paidAt          DateTime?
+  createdAt       DateTime  @default(now())
+
+  subscription    Subscription @relation(fields: [subscriptionId], references: [id])
+}
+
+// ============================================================
+// CUSTOMERS
+// ============================================================
+
+model Customer {
+  id                  String    @id @default(uuid())
+  userId              String?   @unique  // null until they create a portal account
+  businessId          String
+  firstName           String
+  lastName            String
+  email               String?
+  phone               String
+  nationalId          String?
+  address             String?
+  city                String?
+  isActive            Boolean   @default(true)
+  invitationToken     String?   @unique
+  invitationSentAt    DateTime?
+  portalAccessEnabled Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user                User?             @relation(fields: [userId], references: [id])
+  business            Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  verification        CustomerVerification?
+  documents           CustomerDocument[]
+  financingAgreements FinancingAgreement[]
+  rentalAgreements    RentalAgreement[]
+  paymentTransactions PaymentTransaction[]
+  notifications       Notification[]
+  supportTickets      SupportTicket[]
+  deviceReturns       DeviceReturn[]
+  ownershipTransfers  OwnershipTransfer[]
+
+  @@index([businessId])
+  @@index([phone])
+  @@index([email])
+}
+
+model CustomerVerification {
+  id              String    @id @default(uuid())
+  customerId      String    @unique
+  idType          String    // NATIONAL_ID, PASSPORT, DRIVING_LICENSE
+  idNumber        String
+  idDocumentUrl   String?   // Encrypted reference
+  verifiedAt      DateTime?
+  verifiedBy      String?   // Employee ID
+  notes           String?
+  createdAt       DateTime  @default(now())
+
+  customer        Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model CustomerDocument {
+  id          String    @id @default(uuid())
+  customerId  String
+  type        String    // ID_FRONT, ID_BACK, SELFIE, AGREEMENT_SIGNED, OTHER
+  url         String    // Encrypted reference to storage
+  uploadedAt  DateTime  @default(now())
+  uploadedBy  String?
+
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
+// ============================================================
+// DEVICES
+// ============================================================
+
+model Device {
+  id                  String        @id @default(uuid())
+  businessId          String
+  branchId            String?
+  manufacturer        String
+  model               String
+  serialNumber        String
+  assetTag            String?       @unique
+  purchasePrice       Decimal?      @db.Decimal(14, 2)
+  acquisitionCost     Decimal?      @db.Decimal(14, 2)
+  purchasedAt         DateTime?
+  warrantyExpiresAt   DateTime?
+  physicalCondition   String?       // EXCELLENT, GOOD, FAIR, POOR
+  accessories         String[]      // Array of accessory names
+  notes               String?
+  status              DeviceStatus  @default(AVAILABLE)
+  currentOS           DeviceOS      @default(UNKNOWN)
+  currentCustomerId   String?       // Denormalized for quick lookup
+  currentAgreementId  String?       // Denormalized, agreement type tracked separately
+  currentAgreementType AgreementType?
+  isRetired           Boolean       @default(false)
+  retiredAt           DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  business            Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  branch              Branch?           @relation(fields: [branchId], references: [id])
+  photos              DevicePhoto[]
+  identity            DeviceIdentity?
+  capabilities        DeviceCapability[]
+  enrollments         DeviceEnrollment[]
+  credentials         DeviceCredential[]
+  heartbeats          DeviceHeartbeat[]
+  commands            DeviceCommand[]
+  events              DeviceEvent[]
+  agentInfo           DeviceAgent?
+  financingAgreements FinancingAgreement[]
+  rentalAgreements    RentalAgreement[]
+  restrictions        DeviceRestriction[]
+  authorizations      DeviceAuthorization[]
+  returns             DeviceReturn[]
+  inspections         DeviceInspection[]
+  maintenance         DeviceMaintenance[]
+  ownershipRecords    DeviceOwnershipRecord[]
+  ownershipTransfers  OwnershipTransfer[]
+
+  @@unique([businessId, serialNumber])
+  @@index([businessId])
+  @@index([status])
+  @@index([currentOS])
+  @@index([currentCustomerId])
+}
+
+model DevicePhoto {
+  id          String    @id @default(uuid())
+  deviceId    String
+  url         String
+  caption     String?
+  uploadedAt  DateTime  @default(now())
+  uploadedBy  String?
+
+  device      Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+}
+
+model DeviceIdentity {
+  id                  String    @id @default(uuid())
+  deviceId            String    @unique
+  // Hardware fingerprint fields
+  systemUUID          String?
+  motherboardSerial   String?
+  biosUUID            String?
+  cpuId               String?
+  macAddresses        String[]  // Multiple, not the sole identifier
+  storageSerials      String[]  // SSDs/HDDs
+  tpmPresent          Boolean   @default(false)
+  tpmVersion          String?
+  tpmManufacturer     String?
+  tpmEKCertHash       String?   // Endorsement Key cert hash
+  secureBoot          Boolean?
+  uefiEnabled         Boolean?
+  // Cryptographic identity
+  devicePublicKey     String?   // PEM-encoded ECDSA public key
+  tpmBoundKeyHandle   String?   // TPM key handle reference (not the key itself)
+  identityHash        String?   // Composite hash of stable hardware fields
+  // Metadata
+  firstSeenAt         DateTime  @default(now())
+  lastUpdatedAt       DateTime  @updatedAt
+
+  device              Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([identityHash])
+  @@index([systemUUID])
+  @@index([tpmEKCertHash])
+}
+
+model DeviceCapability {
+  id          String    @id @default(uuid())
+  deviceId    String
+  capability  String    // e.g., "TPM_2_0", "SECURE_BOOT", "UEFI", "OEM_ENROLLMENT"
+  supported   Boolean   @default(false)
+  details     Json?
+  detectedAt  DateTime  @default(now())
+
+  device      Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, capability])
+}
+
+model DeviceEnrollment {
+  id              String    @id @default(uuid())
+  deviceId        String
+  enrolledAt      DateTime  @default(now())
+  enrolledOS      DeviceOS
+  osVersion       String?
+  distro          String?   // e.g., "Ubuntu 22.04 LTS"
+  agentVersion    String
+  previousOS      DeviceOS? // Detect OS switch
+  isReEnrollment  Boolean   @default(false)
+  enrolledBy      String?   // Employee ID if manual
+  ipAddress       String?
+  notes           String?
+
+  device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+}
+
+model DeviceCredential {
+  id              String    @id @default(uuid())
+  deviceId        String
+  credentialType  String    // DEVICE_TOKEN, API_KEY
+  credentialHash  String    // SHA-256 of the actual credential
+  issuedAt        DateTime  @default(now())
+  expiresAt       DateTime?
+  revokedAt       DateTime?
+  revokedReason   String?
+
+  device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([credentialHash])
+}
+
+model DeviceHeartbeat {
+  id              String    @id @default(uuid())
+  deviceId        String
+  receivedAt      DateTime  @default(now())
+  agentVersion    String
+  os              DeviceOS
+  osVersion       String?
+  distro          String?
+  uptime          Int?      // seconds
+  batteryPercent  Int?
+  storageJson     Json?     // Storage devices detected
+  cpuPercent      Float?
+  memPercent      Float?
+  networkJson     Json?     // Network interfaces
+  ipAddress       String?
+  isRestricted    Boolean   @default(false)
+
+  device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, receivedAt])
+}
+
+model DeviceCommand {
+  id              String        @id @default(uuid())
+  deviceId        String
+  agreementId     String?       // Which agreement this command relates to
+  agreementType   AgreementType?
+  commandType     CommandType
+  status          CommandStatus @default(PENDING)
+  payload         Json          // Command-specific data (restriction screen info, etc.)
+  signature       String        // ECDSA signature of canonical command bytes
+  nonce           String        @unique  // Replay protection
+  issuedAt        DateTime      @default(now())
+  expiresAt       DateTime      // Commands expire (e.g., 24 hours)
+  deliveredAt     DateTime?
+  executedAt      DateTime?
+  acknowledgedAt  DateTime?
+  failedAt        DateTime?
+  failReason      String?
+  issuedBy        String?       // Employee or system
+
+  device          Device        @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, status])
+  @@index([nonce])
+  @@index([expiresAt])
+}
+
+model DeviceEvent {
+  id          String    @id @default(uuid())
+  deviceId    String
+  eventType   String    // ENROLLED, HEARTBEAT, RESTRICTED, UNRESTRICTED, OS_CHANGED, SSD_CHANGED, etc.
+  details     Json?
+  occurredAt  DateTime  @default(now())
+  agentVersion String?
+
+  device      Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, occurredAt])
+  @@index([eventType])
+}
+
+model DeviceAgent {
+  id              String    @id @default(uuid())
+  deviceId        String    @unique
+  os              DeviceOS
+  agentVersion    String
+  lastSeenAt      DateTime  @default(now())
+  isOnline        Boolean   @default(true)
+  protectionLevel ProtectionLevel @default(STANDARD)
+
+  device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+}
+
+model AgentVersion {
+  id              String    @id @default(uuid())
+  os              DeviceOS
+  version         String
+  downloadUrl     String
+  signatureHash   String    // SHA-256 of installer/package
+  releaseNotes    String?
+  isLatest        Boolean   @default(false)
+  isRequired      Boolean   @default(false) // Force update
+  releasedAt      DateTime  @default(now())
+
+  @@unique([os, version])
+}
+
+// ============================================================
+// AGREEMENTS
+// ============================================================
+
+// Base agreement fields shared by both types — embedded via separate models
+// AgreementType discriminates HP vs Rental everywhere
+
+model FinancingAgreement {
+  id                      String              @id @default(uuid())
+  agreementNumber         String              @unique  // e.g., HP-2024-000001
+  businessId              String
+  branchId                String?
+  customerId              String
+  deviceId                String
+  status                  HirePurchaseStatus  @default(DRAFT)
+
+  // Financial terms
+  purchasePriceTZS        Decimal             @db.Decimal(14, 2)
+  depositAmountTZS        Decimal             @db.Decimal(14, 2)  @default(0)
+  financedBalanceTZS      Decimal             @db.Decimal(14, 2)
+  financingChargesTZS     Decimal             @db.Decimal(14, 2)  @default(0)
+  totalContractualTZS     Decimal             @db.Decimal(14, 2)
+  instalmentAmountTZS     Decimal             @db.Decimal(14, 2)
+  paymentFrequency        PaymentFrequency
+
+  // Dates
+  startDate               DateTime
+  expectedCompletionDate  DateTime
+  depositDueDate          DateTime?
+  gracePeriodDays         Int                 @default(3)
+
+  // Default/overdue policy
+  defaultPolicyDays       Int                 @default(30)
+  lateFeeAmountTZS        Decimal             @db.Decimal(14, 2) @default(0)
+  lateFeeIsPercent        Boolean             @default(false)  // If true, lateFeeAmount is a %
+
+  // Ownership transfer conditions (JSON for flexibility)
+  ownershipTransferConditions Json            // { "allInstalmentsRequired": true, "noOutstandingCharges": true }
+
+  // Acceptance
+  customerAcceptedAt      DateTime?
+  customerSignatureUrl    String?
+  businessApprovedAt      DateTime?
+  businessApprovedBy      String?
+
+  // Agreement PDF
+  agreementPdfUrl         String?
+  agreementPdfGeneratedAt DateTime?
+
+  // Completion / transfer
+  completedAt             DateTime?
+  ownershipTransferredAt  DateTime?
+
+  notes                   String?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  business                Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  branch                  Branch?             @relation(fields: [branchId], references: [id])
+  customer                Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  device                  Device              @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+
+  paymentSchedule         PaymentSchedule?
+  instalments             Instalment[]
+  transactions            PaymentTransaction[]
+  ledgerEntries           FinancialLedger[]
+  restrictions            DeviceRestriction[]
+  authorizations          DeviceAuthorization[]
+  ownershipTransfer       OwnershipTransfer?
+  notifications           Notification[]
+  auditLogs               AuditLog[]
+
+  @@index([businessId, status])
+  @@index([customerId])
+  @@index([deviceId])
+  @@index([agreementNumber])
+}
+
+model RentalAgreement {
+  id                      String          @id @default(uuid())
+  agreementNumber         String          @unique  // e.g., RT-2024-000001
+  businessId              String
+  branchId                String?
+  customerId              String
+  deviceId                String
+  status                  RentalStatus    @default(DRAFT)
+
+  // Financial terms
+  rentalPriceTZS          Decimal         @db.Decimal(14, 2)
+  paymentFrequency        PaymentFrequency
+  securityDepositTZS      Decimal         @db.Decimal(14, 2) @default(0)
+  totalExpectedTZS        Decimal         @db.Decimal(14, 2)
+
+  // Dates
+  startDate               DateTime
+  endDate                 DateTime
+  nextPaymentDate         DateTime
+  returnDeadline          DateTime?
+  gracePeriodDays         Int             @default(3)
+
+  // Renewal
+  isAutoRenewable         Boolean         @default(false)
+  maxRenewalCount         Int             @default(0)   // 0 = unlimited if autoRenewable
+  renewalCount            Int             @default(0)
+  parentRentalId          String?         // Previous agreement if this is a renewal
+
+  // Late fees
+  lateFeeAmountTZS        Decimal         @db.Decimal(14, 2) @default(0)
+  lateFeeIsPercent        Boolean         @default(false)
+  defaultPolicyDays       Int             @default(30)
+
+  // Device condition at handover
+  deviceConditionAtHandover String?       // EXCELLENT, GOOD, FAIR, POOR
+  accessoriesIssued         String[]
+
+  // Acceptance
+  customerAcceptedAt      DateTime?
+  customerSignatureUrl    String?
+  businessApprovedAt      DateTime?
+  businessApprovedBy      String?
+
+  // Agreement PDF — MUST contain ownership retention clause
+  agreementPdfUrl         String?
+  agreementPdfGeneratedAt DateTime?
+
+  // Completion
+  financiallySettledAt    DateTime?       // When all charges paid
+  completedAt             DateTime?
+
+  notes                   String?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  business                Business        @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  branch                  Branch?         @relation(fields: [branchId], references: [id])
+  customer                Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  device                  Device          @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  parentRental            RentalAgreement? @relation("RentalRenewals", fields: [parentRentalId], references: [id])
+  renewals                RentalAgreement[] @relation("RentalRenewals")
+
+  paymentSchedule         PaymentSchedule?
+  rentalCharges           RentalCharge[]
+  transactions            PaymentTransaction[]
+  ledgerEntries           FinancialLedger[]
+  securityDeposit         SecurityDeposit?
+  restrictions            DeviceRestriction[]
+  authorizations          DeviceAuthorization[]
+  deviceReturn            DeviceReturn?
+  notifications           Notification[]
+  auditLogs               AuditLog[]
+
+  // CRITICAL: Business always retains ownership. No ownership transfer from rental.
+
+  @@index([businessId, status])
+  @@index([customerId])
+  @@index([deviceId])
+  @@index([agreementNumber])
+  @@index([endDate])
+}
+
+// ============================================================
+// PAYMENT SCHEDULES & INSTALMENTS
+// ============================================================
+
+model PaymentSchedule {
+  id                    String    @id @default(uuid())
+  financingAgreementId  String?   @unique
+  rentalAgreementId     String?   @unique
+  generatedAt           DateTime  @default(now())
+  lastRecalculatedAt    DateTime?
+
+  financingAgreement    FinancingAgreement? @relation(fields: [financingAgreementId], references: [id])
+  rentalAgreement       RentalAgreement?    @relation(fields: [rentalAgreementId], references: [id])
+  instalments           Instalment[]
+  rentalCharges         RentalCharge[]
+}
+
+model Instalment {
+  id                    String    @id @default(uuid())
+  scheduleId            String
+  financingAgreementId  String
+  instalmentNumber      Int
+  dueDate               DateTime
+  principalAmountTZS    Decimal   @db.Decimal(14, 2)
+  chargesAmountTZS      Decimal   @db.Decimal(14, 2) @default(0)
+  totalAmountTZS        Decimal   @db.Decimal(14, 2)
+  paidAmountTZS         Decimal   @db.Decimal(14, 2) @default(0)
+  lateFeeAppliedTZS     Decimal   @db.Decimal(14, 2) @default(0)
+  isPaid                Boolean   @default(false)
+  paidAt                DateTime?
+  isOverdue             Boolean   @default(false)
+  overdueAt             DateTime?
+  gracePeriodEndsAt     DateTime?
+  notes                 String?
+
+  schedule              PaymentSchedule    @relation(fields: [scheduleId], references: [id])
+  financingAgreement    FinancingAgreement @relation(fields: [financingAgreementId], references: [id])
+
+  @@index([financingAgreementId, isPaid])
+  @@index([dueDate])
+}
+
+model RentalCharge {
+  id                  String    @id @default(uuid())
+  scheduleId          String
+  rentalAgreementId   String
+  chargeNumber        Int
+  periodStart         DateTime
+  periodEnd           DateTime
+  dueDate             DateTime
+  amountTZS           Decimal   @db.Decimal(14, 2)
+  paidAmountTZS       Decimal   @db.Decimal(14, 2) @default(0)
+  lateFeeAppliedTZS   Decimal   @db.Decimal(14, 2) @default(0)
+  isPaid              Boolean   @default(false)
+  paidAt              DateTime?
+  isOverdue           Boolean   @default(false)
+  overdueAt           DateTime?
+  gracePeriodEndsAt   DateTime?
+  notes               String?
+
+  schedule            PaymentSchedule  @relation(fields: [scheduleId], references: [id])
+  rentalAgreement     RentalAgreement  @relation(fields: [rentalAgreementId], references: [id])
+
+  @@index([rentalAgreementId, isPaid])
+  @@index([dueDate])
+}
+
+// ============================================================
+// FINANCIAL LEDGER (IMMUTABLE)
+// ============================================================
+
+// Every financial event is recorded here and NEVER deleted
+model FinancialLedger {
+  id                      String                @id @default(uuid())
+  // Immutable once created — no updatedAt
+  businessId              String
+  customerId              String
+  agreementId             String?
+  agreementType           AgreementType?
+  deviceId                String?
+  financingAgreementId    String?
+  rentalAgreementId       String?
+  transactionId           String?               // Links to PaymentTransaction if applicable
+  entryType               LedgerEntryType
+  amountTZS               Decimal               @db.Decimal(14, 2)
+  // Separate buckets — NEVER mix security deposit with revenue
+  bucket                  String                // PRINCIPAL, FINANCING_CHARGES, RENTAL, LATE_FEE, SECURITY_DEPOSIT, REFUND, OTHER
+  runningBalanceTZS       Decimal               @db.Decimal(14, 2)  // For display
+  description             String
+  referenceNumber         String?               // Agreement or transaction ref
+  recordedAt              DateTime              @default(now())
+  recordedBy              String?               // System or employee ID
+  isReversed              Boolean               @default(false)
+  reversalLedgerId        String?               // Points to reversal entry
+
+  financingAgreement      FinancingAgreement?   @relation(fields: [financingAgreementId], references: [id])
+  rentalAgreement         RentalAgreement?      @relation(fields: [rentalAgreementId], references: [id])
+
+  @@index([businessId, agreementType])
+  @@index([customerId])
+  @@index([financingAgreementId])
+  @@index([rentalAgreementId])
+  @@index([recordedAt])
+  // No update/delete allowed — enforced at application level and DB permissions
+}
+
+// ============================================================
+// PAYMENT TRANSACTIONS
+// ============================================================
+
+model PaymentTransaction {
+  id                      String                @id @default(uuid())
+  transactionReference    String                @unique   // Internal ref, e.g., TXN-2024-000001
+  businessId              String
+  customerId              String
+  financingAgreementId    String?
+  rentalAgreementId       String?
+  agreementType           AgreementType?
+  deviceId                String?
+  amountTZS               Decimal               @db.Decimal(14, 2)
+  currency                String                @default("TZS")
+  paymentProvider         String                // HATPESA, MANUAL, etc.
+  paymentMethod           String?               // MOBILE_MONEY, CASH, BANK_TRANSFER, etc.
+  providerReference       String?               // HatPesa transaction ID
+  providerMetadata        Json?                 // Full provider response (encrypted sensitive parts)
+  status                  TransactionStatus     @default(PENDING)
+  verificationStatus      VerificationStatus    @default(UNVERIFIED)
+  reconciliationStatus    ReconciliationStatus  @default(PENDING)
+  idempotencyKey          String                @unique   // Prevent duplicate processing
+  webhookReceivedAt       DateTime?
+  verifiedAt              DateTime?
+  reconciledAt            DateTime?
+  failReason              String?
+  notes                   String?
+  recordedBy              String?               // System or employee ID
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  business                Business              @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer                Customer              @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  financingAgreement      FinancingAgreement?   @relation(fields: [financingAgreementId], references: [id])
+  rentalAgreement         RentalAgreement?      @relation(fields: [rentalAgreementId], references: [id])
+
+  @@index([businessId])
+  @@index([customerId])
+  @@index([status])
+  @@index([providerReference])
+  @@index([idempotencyKey])
+}
+
+// ============================================================
+// SECURITY DEPOSITS (Separate from Revenue — Never Mix)
+// ============================================================
+
+model SecurityDeposit {
+  id                  String    @id @default(uuid())
+  rentalAgreementId   String    @unique
+  customerId          String
+  businessId          String
+  amountTZS           Decimal   @db.Decimal(14, 2)
+  paidAmountTZS       Decimal   @db.Decimal(14, 2) @default(0)
+  isPaid              Boolean   @default(false)
+  paidAt              DateTime?
+  isRefunded          Boolean   @default(false)
+  refundedAmountTZS   Decimal   @db.Decimal(14, 2) @default(0)
+  refundedAt          DateTime?
+  deductionsJson      Json?     // Damage deductions with reasons
+  reconciliationNotes String?
+  reconciledAt        DateTime?
+  reconciledBy        String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  rentalAgreement     RentalAgreement  @relation(fields: [rentalAgreementId], references: [id])
+  transactions        DepositTransaction[]
+
+  @@index([rentalAgreementId])
+}
+
+model DepositTransaction {
+  id              String    @id @default(uuid())
+  depositId       String
+  amountTZS       Decimal   @db.Decimal(14, 2)
+  type            String    // COLLECTION, REFUND, DEDUCTION
+  description     String
+  transactionRef  String?
+  recordedAt      DateTime  @default(now())
+  recordedBy      String?
+
+  deposit         SecurityDeposit @relation(fields: [depositId], references: [id])
+}
+
+// ============================================================
+// DEVICE RESTRICTIONS & AUTHORIZATIONS
+// ============================================================
+
+model DeviceRestriction {
+  id                    String          @id @default(uuid())
+  deviceId              String
+  businessId            String
+  financingAgreementId  String?
+  rentalAgreementId     String?
+  agreementType         AgreementType
+  commandId             String?         // Links to the DeviceCommand that caused this
+  restrictionType       RestrictionType @default(OVERLAY_LOCK)
+  reason                String
+  outstandingAmountTZS  Decimal?        @db.Decimal(14, 2)
+  paymentInstructions   String?
+  supportContact        String?
+  recoveryInstructions  String?
+  isActive              Boolean         @default(true)
+  restrictedAt          DateTime        @default(now())
+  liftedAt              DateTime?
+  liftedByCommandId     String?
+  liftedByTransactionId String?
+  auditNotes            String?
+
+  device                Device              @relation(fields: [deviceId], references: [id])
+  financingAgreement    FinancingAgreement? @relation(fields: [financingAgreementId], references: [id])
+  rentalAgreement       RentalAgreement?    @relation(fields: [rentalAgreementId], references: [id])
+
+  @@index([deviceId, isActive])
+  @@index([financingAgreementId])
+  @@index([rentalAgreementId])
+}
+
+model DeviceAuthorization {
+  id                    String          @id @default(uuid())
+  deviceId              String
+  financingAgreementId  String?
+  rentalAgreementId     String?
+  agreementType         AgreementType
+  isAuthorized          Boolean         @default(true)
+  authorizationBasis    String          // PAYMENT_CURRENT, RESTORED, OWNERSHIP_TRANSFERRED, RENTAL_ACTIVE
+  checkedAt             DateTime        @default(now())
+  expiresAt             DateTime?       // Authorization valid until (re-check required)
+  commandId             String?
+
+  device                Device              @relation(fields: [deviceId], references: [id])
+  financingAgreement    FinancingAgreement? @relation(fields: [financingAgreementId], references: [id])
+  rentalAgreement       RentalAgreement?    @relation(fields: [rentalAgreementId], references: [id])
+
+  @@index([deviceId])
+}
+
+// ============================================================
+// DEVICE RETURNS & INSPECTIONS
+// ============================================================
+
+model DeviceReturn {
+  id                    String        @id @default(uuid())
+  deviceId              String
+  customerId            String
+  businessId            String
+  financingAgreementId  String?
+  rentalAgreementId     String?       @unique
+  agreementType         AgreementType
+  status                ReturnStatus  @default(REQUESTED)
+  requestedAt           DateTime      @default(now())
+  notifiedAt            DateTime?
+  deadline              DateTime?
+  collectedAt           DateTime?
+  businessApprovedAt    DateTime?
+  businessApprovedBy    String?
+  notes                 String?
+
+  device                Device              @relation(fields: [deviceId], references: [id])
+  customer              Customer            @relation(fields: [customerId], references: [id])
+  rentalAgreement       RentalAgreement?    @relation(fields: [rentalAgreementId], references: [id])
+  inspection            DeviceInspection?
+
+  @@index([deviceId])
+  @@index([customerId])
+}
+
+model DeviceInspection {
+  id                    String            @id @default(uuid())
+  deviceReturnId        String            @unique
+  deviceId              String
+  inspectedAt           DateTime          @default(now())
+  inspectedBy           String?           // Employee ID
+  result                InspectionResult
+  conditionRating       String?           // EXCELLENT, GOOD, FAIR, POOR
+  accessories           Json?             // Checklist: accessory -> found (bool)
+  damageDescription     String?
+  estimatedRepairCostTZS Decimal?         @db.Decimal(14, 2)
+  photoUrls             String[]
+  notes                 String?
+
+  deviceReturn          DeviceReturn        @relation(fields: [deviceReturnId], references: [id])
+  device                Device              @relation(fields: [deviceId], references: [id])
+
+  @@index([deviceId])
+}
+
+model DeviceMaintenance {
+  id              String    @id @default(uuid())
+  deviceId        String
+  businessId      String
+  description     String
+  type            String    // REPAIR, SERVICING, CLEANING, SOFTWARE_UPDATE
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+  costTZS         Decimal?  @db.Decimal(14, 2)
+  performedBy     String?
+  notes           String?
+
+  device          Device    @relation(fields: [deviceId], references: [id])
+
+  @@index([deviceId])
+}
+
+// ============================================================
+// OWNERSHIP RECORDS
+// ============================================================
+
+// Complete ownership history for every device
+model DeviceOwnershipRecord {
+  id              String        @id @default(uuid())
+  deviceId        String
+  ownerType       OwnershipType
+  businessId      String        // Always the business initially
+  customerId      String?       // Only set when CUSTOMER ownership (post HP completion)
+  startedAt       DateTime      @default(now())
+  endedAt         DateTime?     // null = current owner
+  basis           String        // PURCHASE, HIRE_PURCHASE_COMPLETION, RENTAL_ACTIVE, etc.
+  agreementId     String?
+  agreementType   AgreementType?
+  notes           String?
+
+  device          Device        @relation(fields: [deviceId], references: [id])
+
+  @@index([deviceId, endedAt])
+}
+
+// CRITICAL: Only created after verified HP completion — never for rental
+model OwnershipTransfer {
+  id                    String    @id @default(uuid())
+  deviceId              String
+  financingAgreementId  String    @unique  // One transfer per agreement, enforced
+  businessId            String            // Previous owner
+  customerId            String            // New owner
+  transferredAt         DateTime  @default(now())
+  verifiedByLedger      Boolean   @default(false)  // Financial ledger verified
+  allConditionsMet      Boolean   @default(false)  // All HP conditions met
+  certificatePdfUrl     String?
+  certificateGeneratedAt DateTime?
+  authorizedBy          String?   // Employee who authorized
+  notes                 String?
+  // IMMUTABLE: Cannot be silently reversed — correction requires separate process
+  correctionRequestId   String?   // If a legal correction was needed
+
+  device                Device              @relation(fields: [deviceId], references: [id])
+  financingAgreement    FinancingAgreement  @relation(fields: [financingAgreementId], references: [id])
+  customer              Customer            @relation(fields: [customerId], references: [id])
+
+  @@index([deviceId])
+  @@index([customerId])
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id                    String              @id @default(uuid())
+  businessId            String?
+  customerId            String?
+  userId                String?
+  financingAgreementId  String?
+  rentalAgreementId     String?
+  channel               NotificationChannel
+  status                NotificationStatus  @default(PENDING)
+  type                  String              // e.g., PAYMENT_DUE, RESTRICTION_APPLIED, OWNERSHIP_TRANSFERRED
+  subject               String?
+  body                  String
+  metadata              Json?
+  scheduledFor          DateTime            @default(now())
+  sentAt                DateTime?
+  deliveredAt           DateTime?
+  readAt                DateTime?
+  failReason            String?
+  retryCount            Int                 @default(0)
+  createdAt             DateTime            @default(now())
+
+  business              Business?           @relation(fields: [businessId], references: [id])
+  customer              Customer?           @relation(fields: [customerId], references: [id])
+  user                  User?               @relation(fields: [userId], references: [id])
+  financingAgreement    FinancingAgreement? @relation(fields: [financingAgreementId], references: [id])
+  rentalAgreement       RentalAgreement?    @relation(fields: [rentalAgreementId], references: [id])
+
+  @@index([businessId, status])
+  @@index([customerId, status])
+  @@index([scheduledFor])
+}
+
+// ============================================================
+// AUDIT LOGS (IMMUTABLE)
+// ============================================================
+
+model AuditLog {
+  id                    String      @id @default(uuid())
+  businessId            String?
+  actorId               String?     // User who performed the action
+  actorRole             UserRole?
+  action                AuditAction
+  resource              String      // Table/entity name
+  resourceId            String?
+  financingAgreementId  String?
+  rentalAgreementId     String?
+  changes               Json?       // { before, after } — sensitive fields redacted
+  ipAddress             String?
+  userAgent             String?
+  metadata              Json?
+  occurredAt            DateTime    @default(now())
+
+  business              Business?           @relation(fields: [businessId], references: [id])
+  actor                 User?               @relation("ActorAuditLogs", fields: [actorId], references: [id])
+  financingAgreement    FinancingAgreement? @relation(fields: [financingAgreementId], references: [id])
+  rentalAgreement       RentalAgreement?    @relation(fields: [rentalAgreementId], references: [id])
+
+  @@index([businessId, occurredAt])
+  @@index([actorId, occurredAt])
+  @@index([resource, resourceId])
+  @@index([occurredAt])
+  // Audit logs are IMMUTABLE — no update/delete at application layer
+}
+
+// ============================================================
+// SUPPORT TICKETS
+// ============================================================
+
+model SupportTicket {
+  id              String                @id @default(uuid())
+  businessId      String?
+  customerId      String?
+  userId          String?
+  subject         String
+  description     String
+  status          SupportTicketStatus   @default(OPEN)
+  priority        String                @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  category        String?               // PAYMENT, DEVICE, AGREEMENT, RESTRICTION, OTHER
+  assignedTo      String?               // Employee/admin user ID
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  business        Business?             @relation(fields: [businessId], references: [id])
+  customer        Customer?             @relation(fields: [customerId], references: [id])
+  user            User?                 @relation(fields: [userId], references: [id])
+  messages        SupportMessage[]
+
+  @@index([businessId, status])
+  @@index([customerId, status])
+}
+
+model SupportMessage {
+  id          String    @id @default(uuid())
+  ticketId    String
+  senderId    String?
+  senderRole  String?
+  message     String
+  attachments String[]
+  sentAt      DateTime  @default(now())
+  isInternal  Boolean   @default(false)
+
+  ticket      SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
