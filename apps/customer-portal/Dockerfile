@@ -3,6 +3,7 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
+# Copy all package manifests for monorepo workspace resolution
 COPY package.json package-lock.json* ./
 COPY packages/database/package.json ./packages/database/
 COPY packages/shared/package.json ./packages/shared/
