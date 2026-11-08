@@ -245,3 +245,4 @@ git pull origin main
 ```bash
 docker compose exec postgres pg_dump -U hatlock_admin hatlock_db > backup_$(date +%F).sql
 ```
+
