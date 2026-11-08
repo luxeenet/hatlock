@@ -128,20 +128,49 @@ export const SUBSCRIPTION_PLANS = {
   }
 } as const;
 
+export const DEVICE_OS_LIST = [
+  'WINDOWS',
+  'LINUX',
+  'ANDROID',
+  'IOS',
+  'MACOS',
+  'IPADOS',
+  'UNKNOWN'
+] as const;
+
+export type DeviceOS = (typeof DEVICE_OS_LIST)[number];
+
+export const DEVICE_TYPES = [
+  'LAPTOP',
+  'DESKTOP',
+  'SMARTPHONE',
+  'TABLET',
+  'OTHER'
+] as const;
+
+export type DeviceType = (typeof DEVICE_TYPES)[number];
+
 export const HardwareIdentitySchema = z.object({
   serialNumber: z.string().min(1, 'Serial number is required'),
-  systemUuid: z.string().min(1, 'System UUID is required'),
+  systemUuid: z.string().optional().default(''),
   manufacturer: z.string().min(1, 'Manufacturer is required'),
   model: z.string().min(1, 'Model is required'),
+  deviceType: z.enum(DEVICE_TYPES).default('LAPTOP'),
   motherboardSerial: z.string().optional(),
   tpmPresent: z.boolean().default(false),
   tpmVersion: z.string().optional(),
   secureBootEnabled: z.boolean().default(false),
-  osType: z.enum(['WINDOWS', 'LINUX']),
-  osVersion: z.string(),
-  agentVersion: z.string(),
+  osType: z.enum(DEVICE_OS_LIST).default('UNKNOWN'),
+  osVersion: z.string().default(''),
+  agentVersion: z.string().default('1.0.0'),
   cpuId: z.string().optional(),
-  macAddresses: z.array(z.string()).default([])
+  macAddresses: z.array(z.string()).default([]),
+  imei1: z.string().optional(),
+  imei2: z.string().optional(),
+  androidId: z.string().optional(),
+  appleUdid: z.string().optional(),
+  screenLockEnabled: z.boolean().optional(),
+  playIntegrityVerdict: z.string().optional()
 });
 
 export type HardwareIdentityDto = z.infer<typeof HardwareIdentitySchema>;
@@ -179,8 +208,54 @@ export const DeviceCreateSchema = z.object({
   manufacturer: z.string().min(1),
   model: z.string().min(1),
   serialNumber: z.string().min(1),
+  deviceType: z.enum(DEVICE_TYPES).default('LAPTOP'),
+  operatingSystem: z.enum(DEVICE_OS_LIST).default('UNKNOWN'),
   purchasePrice: z.number().positive().optional(),
   warrantyExpiry: z.string().datetime().optional(),
   condition: z.string().default('EXCELLENT'),
   notes: z.string().optional()
 });
+
+// ----------------------------------------------------------------------------
+// SonicPesa Payment Gateway Schemas & Types
+// ----------------------------------------------------------------------------
+export const SonicPesaCreateOrderSchema = z.object({
+  buyer_email: z.string().email(),
+  buyer_name: z.string().min(1),
+  buyer_phone: z.string().min(9),
+  amount: z.number().positive(),
+  currency: z.literal('TZS').default('TZS')
+});
+
+export type SonicPesaCreateOrderDto = z.infer<typeof SonicPesaCreateOrderSchema>;
+
+export const SonicPesaOrderStatusSchema = z.object({
+  order_id: z.string().min(1)
+});
+
+export type SonicPesaOrderStatusDto = z.infer<typeof SonicPesaOrderStatusSchema>;
+
+export const SonicPesaPayoutSchema = z.object({
+  amount: z.number().positive(),
+  currency: z.literal('TZS').default('TZS'),
+  recipient_phone: z.string().min(9),
+  recipient_name: z.string().min(1),
+  transaction_pin: z.string().min(4),
+  remarks: z.string().optional()
+});
+
+export type SonicPesaPayoutDto = z.infer<typeof SonicPesaPayoutSchema>;
+
+export const SonicPesaWebhookPayloadSchema = z.object({
+  event: z.string().optional(),
+  order_id: z.string(),
+  amount: z.union([z.number(), z.string()]),
+  currency: z.string().default('TZS'),
+  status: z.enum(['SUCCESS', 'PENDING', 'CANCELLED', 'REJECTED']),
+  transaction_id: z.string().optional(),
+  channel: z.string().optional(),
+  timestamp: z.union([z.number(), z.string()]).optional()
+});
+
+export type SonicPesaWebhookPayload = z.infer<typeof SonicPesaWebhookPayloadSchema>;
+

@@ -51,3 +51,4 @@ echo "   - API Documentation: http://localhost:3000/docs"
 echo "   - Web Admin:         http://localhost:3002"
 echo "   - Customer Portal:   http://localhost:3001"
 echo "=================================================="
+

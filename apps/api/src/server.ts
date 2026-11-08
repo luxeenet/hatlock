@@ -27,6 +27,7 @@ import { financingRoutes } from './routes/financing.js';
 import { rentalRoutes } from './routes/rentals.js';
 import { paymentRoutes } from './routes/payments.js';
 import { hatpesaWebhookRoutes } from './routes/hatpesa-webhook.js';
+import { sonicpesaWebhookRoutes } from './routes/sonicpesa-webhook.js';
 import { restrictionRoutes } from './routes/restrictions.js';
 import { returnRoutes } from './routes/returns.js';
 import { ownershipRoutes } from './routes/ownership.js';
@@ -38,6 +39,8 @@ import { supportRoutes } from './routes/support.js';
 import { superAdminRoutes } from './routes/super-admin.js';
 import { agentRoutes } from './routes/agents.js';
 import { dashboardRoutes } from './routes/dashboard.js';
+import { androidMdmRoutes } from './routes/android-mdm.js';
+import { appleMdmRoutes } from './routes/apple-mdm.js';
 
 // Hooks
 import { tenantMiddleware } from './middleware/tenant.js';
@@ -149,8 +152,10 @@ async function buildServer() {
   server.decorate('authenticate', authMiddleware(server));
   server.decorate('requireTenant', tenantMiddleware);
 
-  // HatPesa webhook — raw body required for signature verification
+  // Payment webhooks — raw body required for signature verification
   await server.register(hatpesaWebhookRoutes, { prefix: '/webhooks/hatpesa' });
+  await server.register(sonicpesaWebhookRoutes, { prefix: '/webhooks/sonicpesa' });
+  await server.register(sonicpesaWebhookRoutes, { prefix: '/api/v1/webhooks/sonicpesa' });
 
   // Public routes (no auth)
   await server.register(authRoutes, { prefix: '/api/v1/auth' });
@@ -159,6 +164,8 @@ async function buildServer() {
   await server.register(deviceEnrollmentRoutes, { prefix: '/api/v1/agent' });
   await server.register(deviceCommandRoutes, { prefix: '/api/v1/agent' });
   await server.register(agentRoutes, { prefix: '/api/v1/agent' });
+  await server.register(androidMdmRoutes, { prefix: '/api/v1/mdm/android' });
+  await server.register(appleMdmRoutes, { prefix: '/api/v1/mdm/apple' });
 
   // Protected business routes
   await server.register(businessRoutes, { prefix: '/api/v1/businesses' });

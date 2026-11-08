@@ -10,8 +10,8 @@
 | **Product** | HatLock by Luxeenet |
 | **Tagline** | Smart Device Financing. Secure Payments. Controlled Access. |
 | **Repository** | `c:\Users\hatlock` |
-| **Current Status** | 🟢 PRODUCTION-READY — Zero Compiler Errors, 16/16 Vitest Unit Tests Passing, Next.js Production Builds Verified |
-| **Last Updated** | 2026-10-30 |
+| **Current Status** | 🟢 PRODUCTION-READY — Universal Multi-Brand MDM (Windows, Linux, Android Enterprise, Apple MDM), Dual Payment Gateways (HatPesa + SonicPesa), 19/19 Vitest Unit Tests Passing, Next.js Verified |
+| **Last Updated** | 2026-11-08 |
 
 ### Technology Stack
 
@@ -641,6 +641,11 @@
 | **Employees** | "Add Employee" Modal & Action | Enter employee details, branch, role, submit | Creates user and employee record in PostgreSQL | `apps/web/src/app/employees/page.tsx`, `apps/api/src/routes/employees.ts` | `POST /api/v1/employees` | `Employee.create`, `User.create` | Registered new team member | `[x]` VERIFIED | None |
 | **Branches** | "Add Branch" Modal & Action | Enter branch name, address, phone, submit | Creates branch hub in PostgreSQL | `apps/web/src/app/branches/page.tsx`, `apps/api/src/routes/branches.ts` | `POST /api/v1/branches` | `Branch.create` | Created "Arusha Central Hub" branch | `[x]` VERIFIED | None |
 | **Audit Logs** | Security Audit Journal | View immutable audit trail of signed commands, status changes, and logins | Fetches audit logs from PostgreSQL and displays chronological event stream | `apps/web/src/app/audit-logs/page.tsx`, `apps/api/src/routes/audit.ts` | `GET /api/v1/audit` | `AuditLog.findMany` | Loaded and filtered live audit trail | `[x]` VERIFIED | None |
+
+| **Payments (SonicPesa)** | Dual Gateway & Authorized Payouts | Create order, check status, verify HMAC-SHA256 webhooks, and execute PIN-authorized payouts | Real-time dual gateway integration alongside HatPesa with raw buffer HMAC validation, idempotency and PIN security | `packages/sonicpesa`, `apps/api/src/routes/sonicpesa-webhook.ts`, `apps/api/src/routes/payments.ts`, `apps/web/src/app/payments/page.tsx` | `POST /api/v1/payments/sonicpesa/create-order`, `POST /api/v1/webhooks/sonicpesa`, `POST /api/v1/payments/sonicpesa/payout` | `PaymentProviderConfig`, `PayoutRecord`, `PaymentTransaction` | Verified end-to-end order creation, status check, valid/invalid webhook HMAC, and PIN-authorized payout (6 unit tests) | `[x]` VERIFIED | None |
+| **Android Enterprise MDM** | QR Device Owner Provisioning & Heartbeat | Provision Samsung, Tecno, Infinix, Xiaomi, OPPO devices as Device Owner | Generates enterprise provisioning QR profile, enrolls Android Keystore keys, syncs security policies (kiosk, lock, factory-reset protection) | `apps/api/src/routes/android-mdm.ts`, `apps/web/src/app/devices/page.tsx` | `GET /api/v1/mdm/android/qr-profile`, `POST /api/v1/mdm/android/enroll`, `POST /api/v1/mdm/android/heartbeat` | `Device`, `DeviceIdentity` | Generated QR configuration and verified Keystore attestation & policy synchronization (Vitest suite) | `[x]` VERIFIED | None |
+| **Apple MDM Protocol** | OTA Profile & MDM Server Protocol | Manage iPhones and iPads with supervised device control | Generates signed `.mobileconfig` OTA profile, handles Check-in (`Authenticate`, `TokenUpdate`, `CheckOut`), and MDM commands (`DeviceLock`, `DeviceInformation`) | `apps/api/src/routes/apple-mdm.ts`, `apps/web/src/app/devices/page.tsx` | `GET /api/v1/mdm/apple/profile`, `PUT /api/v1/mdm/apple/checkin`, `PUT /api/v1/mdm/apple/server` | `Device`, `DeviceIdentity` | Verified OTA profile generation and MDM command loop processing (Vitest suite) | `[x]` VERIFIED | None |
+| **Cross-Platform Anti-Tamper** | Multi-Brand Identity & Confidence Scoring | Capability-based device fingerprinting across Lenovo, Dell, HP, Samsung, Tecno, Apple, etc. | Computes security confidence score (0-100), detects SSD/drive replacement, OS reinstallation, and reports tamper alerts | `apps/api/src/services/device-enrollment.ts`, `agents/linux/src/identity.rs`, `agents/windows/Services/HardwareIdentityCollector.cs` | `POST /api/v1/enrollment/register`, `POST /api/v1/devices` | `Device`, `DeviceIdentity` | Verified confidence scoring, SSD replacement detection, and LUKS/BitLocker detection | `[x]` VERIFIED | None |
 
 ---
 

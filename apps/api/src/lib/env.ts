@@ -33,6 +33,13 @@ const envSchema = z.object({
   HATPESA_WEBHOOK_SECRET: z.string().default(''),
   HATPESA_TEST_MODE: z.coerce.boolean().default(true),
 
+  // SonicPesa
+  SONICPESA_BASE_URL: z.string().url().default('https://api.sonicpesa.com/api/v1'),
+  SONICPESA_API_KEY: z.string().default(''),
+  SONICPESA_API_SECRET: z.string().default(''),
+  SONICPESA_WEBHOOK_SECRET: z.string().default(''),
+  SONICPESA_TEST_MODE: z.coerce.boolean().default(true),
+
   // Email (Nodemailer)
   SMTP_HOST: z.string().default('localhost'),
   SMTP_PORT: z.coerce.number().default(587),

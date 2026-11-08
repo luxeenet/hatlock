@@ -9,7 +9,8 @@
     "apps/customer-portal",
     "packages/shared",
     "packages/database",
-    "packages/hatpesa"
+    "packages/hatpesa",
+    "packages/sonicpesa"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=apps/api\" \"npm run dev --workspace=apps/web\" \"npm run dev --workspace=apps/customer-portal\"",

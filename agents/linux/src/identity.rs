@@ -20,6 +20,7 @@ pub struct HardwareIdentity {
     pub tpm_version: String,
     pub secure_boot: bool,
     pub uefi_enabled: bool,
+    pub disk_encryption_active: bool,
     pub os_version: String,
     pub agent_version: String,
     pub hardware_identity_hash: String,
@@ -57,6 +58,7 @@ pub fn collect_hardware_identity() -> HardwareIdentity {
 
     let uefi_enabled = Path::new("/sys/firmware/efi").exists();
     let secure_boot = check_secure_boot();
+    let disk_encryption_active = check_disk_encryption();
 
     let os_version = read_os_release();
     let agent_version = "1.0.0".to_string();
@@ -86,10 +88,23 @@ pub fn collect_hardware_identity() -> HardwareIdentity {
         tpm_version,
         secure_boot,
         uefi_enabled,
+        disk_encryption_active,
         os_version,
         agent_version,
         hardware_identity_hash,
     }
+}
+
+fn check_disk_encryption() -> bool {
+    if let Ok(entries) = fs::read_dir("/dev/mapper") {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with("luks-") || name.contains("crypt") {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn read_sysfs_string(path: &str) -> Option<String> {

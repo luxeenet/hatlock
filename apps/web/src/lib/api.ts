@@ -95,29 +95,63 @@ export interface Device {
   serialNumber: string;
   manufacturer: string;
   model: string;
-  currentOS: 'WINDOWS' | 'LINUX' | 'UNKNOWN';
-  status: 'AVAILABLE' | 'ACTIVE' | 'RESTRICTED' | 'GRACE_PERIOD' | 'CUSTOMER_OWNED' | 'MAINTENANCE';
+  deviceType?: 'LAPTOP' | 'DESKTOP' | 'SMARTPHONE' | 'TABLET' | 'OTHER';
+  currentOS: 'WINDOWS' | 'LINUX' | 'ANDROID' | 'IOS' | 'MACOS' | 'IPADOS' | 'UNKNOWN';
+  platform?: string;
+  complianceStatus?: string;
+  confidenceScore?: number;
+  enrollmentType?: string;
+  status: 'AVAILABLE' | 'ACTIVE' | 'RESTRICTED' | 'GRACE_PERIOD' | 'CUSTOMER_OWNED' | 'MAINTENANCE' | 'PAYMENT_DUE' | 'RETURN_PENDING' | 'RETIRED';
   condition: string;
   purchasePrice?: number;
   notes?: string;
   createdAt: string;
   branch?: { id: string; name: string };
-  identity?: { tpmPresent: boolean };
+  identity?: {
+    tpmPresent?: boolean;
+    secureBoot?: boolean;
+    imei1?: string;
+    imei2?: string;
+    playIntegrityVerdict?: string;
+    encryptionStatus?: string;
+  };
+  agentInfo?: {
+    agentVersion?: string;
+    lastSeenAt?: string;
+    isOnline?: boolean;
+  };
+  restrictions?: Array<{ id: string; isActive: boolean; reason: string }>;
   financingAgreements?: Array<{
+    id?: string;
     agreementNumber: string;
-    customer: { id: string; firstName: string; lastName: string };
+    remainingBalanceTZS?: number;
+    customer: { id: string; firstName: string; lastName: string; phone?: string };
   }>;
   rentalAgreements?: Array<{
+    id?: string;
     agreementNumber: string;
-    customer: { id: string; firstName: string; lastName: string };
+    customer: { id: string; firstName: string; lastName: string; phone?: string };
   }>;
 }
 
 export const apiDevices = {
-  list: (params?: { status?: string; search?: string }) => {
+  list: (params?: {
+    status?: string;
+    search?: string;
+    manufacturer?: string;
+    platform?: string;
+    os?: string;
+    complianceStatus?: string;
+    deviceType?: string;
+  }) => {
     const query = new URLSearchParams();
     if (params?.status && params.status !== 'ALL') query.set('status', params.status);
     if (params?.search) query.set('search', params.search);
+    if (params?.manufacturer && params.manufacturer !== 'ALL') query.set('manufacturer', params.manufacturer);
+    if (params?.platform && params.platform !== 'ALL') query.set('platform', params.platform);
+    if (params?.os && params.os !== 'ALL') query.set('os', params.os);
+    if (params?.complianceStatus && params.complianceStatus !== 'ALL') query.set('complianceStatus', params.complianceStatus);
+    if (params?.deviceType && params.deviceType !== 'ALL') query.set('deviceType', params.deviceType);
     return request<{ devices: Device[] }>(`/devices?${query.toString()}`);
   },
   get: (id: string) => request<{ device: Device }>(`/devices/${id}`),
@@ -127,6 +161,8 @@ export const apiDevices = {
     model: string;
     purchasePrice?: number;
     condition?: string;
+    deviceType?: string;
+    operatingSystem?: string;
     notes?: string;
   }) => request<{ device: Device }>('/devices', {
     method: 'POST',
@@ -232,6 +268,19 @@ export const apiRentals = {
 // ----------------------------------------------------------------------------
 // Payments (HatPesa)
 // ----------------------------------------------------------------------------
+// Payments (HatPesa & SonicPesa)
+// ----------------------------------------------------------------------------
+export interface PaymentProviderInfo {
+  provider: 'HATPESA' | 'SONICPESA';
+  name: string;
+  isEnabled: boolean;
+  isTestMode: boolean;
+  configured: boolean;
+  maskedApiKey?: string | null;
+  lastTestedAt?: string | null;
+  lastTestStatus?: string | null;
+}
+
 export interface PaymentTransaction {
   id: string;
   businessId: string;
@@ -240,20 +289,22 @@ export interface PaymentTransaction {
   rentalAgreementId?: string;
   amountTZS: number;
   currency: string;
+  paymentProvider?: string;
   method: string;
   reference: string;
   externalTransactionId?: string;
-  status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED';
+  status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED' | 'CANCELLED';
   createdAt: string;
   financingAgreement?: { id: string; agreementNumber: string };
   rentalAgreement?: { id: string; agreementNumber: string };
 }
 
 export const apiPayments = {
-  list: (params?: { customerId?: string; status?: string }) => {
+  list: (params?: { customerId?: string; status?: string; provider?: string }) => {
     const query = new URLSearchParams();
     if (params?.customerId) query.set('customerId', params.customerId);
     if (params?.status) query.set('status', params.status);
+    if (params?.provider) query.set('provider', params.provider);
     return request<{ payments: PaymentTransaction[] }>(`/payments?${query.toString()}`);
   },
   initiate: (data: {
@@ -261,11 +312,27 @@ export const apiPayments = {
     agreementId: string;
     amount: number;
     phoneNumber: string;
+    provider?: 'HATPESA' | 'SONICPESA';
     paymentMethod?: string;
-  }) => request<{ transactionId: string; reference: string; status: string }>('/payments/initiate', {
+  }) => request<{ transactionId: string; reference: string; status: string; order_id?: string; provider?: string }>('/payments/initiate', {
     method: 'POST',
     body: JSON.stringify(data)
-  })
+  }),
+  getProviders: () => request<{ providers: PaymentProviderInfo[] }>('/payments/providers'),
+  configureProvider: (provider: string, data: { isEnabled?: boolean; isTestMode?: boolean; apiKey?: string; apiSecret?: string; webhookSecret?: string }) =>
+    request<{ message: string; provider: string }>(`/payments/providers/${provider}/configure`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  testProvider: (provider: string) =>
+    request<{ connected: boolean; message: string }>(`/payments/providers/${provider}/test`, {
+      method: 'POST'
+    }),
+  createPayout: (data: { amount: number; recipientPhone: string; recipientName: string; transactionPin: string; remarks?: string }) =>
+    request<{ status: string; payoutId: string; gateway?: any }>('/payments/payouts/create', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
 };
 
 // ----------------------------------------------------------------------------

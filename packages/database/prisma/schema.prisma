@@ -65,7 +65,19 @@ enum DeviceStatus {
 enum DeviceOS {
   WINDOWS
   LINUX
+  ANDROID
+  IOS
+  MACOS
+  IPADOS
   UNKNOWN
+}
+
+enum DeviceType {
+  LAPTOP
+  DESKTOP
+  SMARTPHONE
+  TABLET
+  OTHER
 }
 
 enum ProtectionLevel {
@@ -342,6 +354,8 @@ model Business {
   rentalAgreements    RentalAgreement[]
   paymentTransactions PaymentTransaction[]
   subscription        Subscription?
+  paymentConfigs      PaymentProviderConfig[]
+  payouts             PayoutRecord[]
   auditLogs           AuditLog[]
   notifications       Notification[]
   supportTickets      SupportTicket[]
@@ -577,7 +591,13 @@ model Device {
   accessories         String[]      // Array of accessory names
   notes               String?
   status              DeviceStatus  @default(AVAILABLE)
+  deviceType          DeviceType    @default(LAPTOP)
   currentOS           DeviceOS      @default(UNKNOWN)
+  platform            String?
+  complianceStatus    String        @default("COMPLIANT")
+  confidenceScore     Float         @default(1.0)
+  enrollmentType      String?
+  tamperAlerts        Json?
   currentCustomerId   String?       // Denormalized for quick lookup
   currentAgreementId  String?       // Denormalized, agreement type tracked separately
   currentAgreementType AgreementType?
@@ -641,6 +661,14 @@ model DeviceIdentity {
   tpmEKCertHash       String?   // Endorsement Key cert hash
   secureBoot          Boolean?
   uefiEnabled         Boolean?
+  // Mobile and Universal Identifiers
+  imei1               String?
+  imei2               String?
+  androidId           String?
+  appleUDID           String?
+  playIntegrityVerdict String?
+  screenLockEnabled   Boolean?
+  encryptionStatus    String?
   // Cryptographic identity
   devicePublicKey     String?   // PEM-encoded ECDSA public key
   tpmBoundKeyHandle   String?   // TPM key handle reference (not the key itself)
@@ -1100,6 +1128,48 @@ model PaymentTransaction {
   @@index([status])
   @@index([providerReference])
   @@index([idempotencyKey])
+}
+
+model PaymentProviderConfig {
+  id                  String    @id @default(uuid())
+  businessId          String
+  provider            String    // HATPESA, SONICPESA
+  isEnabled           Boolean   @default(true)
+  isTestMode          Boolean   @default(true)
+  apiKey              String?
+  apiSecret           String?
+  webhookSecret       String?
+  metadata            Json?
+  lastTestedAt        DateTime?
+  lastTestStatus      String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  business            Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, provider])
+  @@index([businessId])
+}
+
+model PayoutRecord {
+  id                  String    @id @default(uuid())
+  businessId          String
+  provider            String    // SONICPESA
+  amountTZS           Decimal   @db.Decimal(14, 2)
+  recipientPhone      String
+  recipientName       String?
+  status              String    @default("PENDING") // PENDING, APPROVED, PROCESSED, REJECTED, FAILED
+  approvedBy          String?
+  providerReference   String?
+  idempotencyKey      String    @unique
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  business            Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([provider])
 }
 
 // ============================================================

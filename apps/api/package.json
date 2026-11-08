@@ -24,6 +24,7 @@
     "@fastify/swagger-ui": "^6.1.2",
     "@hatlock/database": "*",
     "@hatlock/hatpesa": "*",
+    "@hatlock/sonicpesa": "*",
     "@hatlock/shared": "*",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",

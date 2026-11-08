@@ -25,6 +25,12 @@ export interface HardwareIdentityInput {
   secureBoot?: boolean;
   uefiEnabled?: boolean;
   devicePublicKey?: string;  // Agent-generated ECDSA key
+  imei1?: string;
+  imei2?: string;
+  androidId?: string;
+  appleUDID?: string;
+  screenLockEnabled?: boolean;
+  playIntegrityVerdict?: string;
 }
 
 export interface EnrollmentInput {
@@ -52,10 +58,63 @@ function computeIdentityHash(hw: HardwareIdentityInput): string {
     hw.serialNumber,
     hw.motherboardSerial ?? '',
     hw.biosUUID ?? '',
-    hw.tpmEKCertHash ?? ''
+    hw.tpmEKCertHash ?? '',
+    hw.imei1 ?? '',
+    hw.imei2 ?? '',
+    hw.androidId ?? '',
+    hw.appleUDID ?? ''
   ].join('|').toLowerCase().trim();
 
   return crypto.createHash('sha256').update(fields).digest('hex');
+}
+
+// Compute capability-based security confidence score (0.0 to 1.0)
+function computeConfidenceScore(hw: HardwareIdentityInput, os: DeviceOS): { score: number; limitations: string[] } {
+  let score = 0.5; // Baseline confidence
+  const limitations: string[] = [];
+
+  if (os === DeviceOS.WINDOWS || os === DeviceOS.LINUX) {
+    if (hw.tpmPresent) {
+      score += 0.25;
+    } else {
+      limitations.push('TPM not detected — firmware-backed key storage unavailable');
+    }
+
+    if (hw.secureBoot) {
+      score += 0.15;
+    } else {
+      limitations.push('Secure Boot disabled — bootloader integrity cannot be assured');
+    }
+
+    if (hw.motherboardSerial && hw.biosUUID) {
+      score += 0.1;
+    }
+  } else if (os === DeviceOS.ANDROID) {
+    if (hw.playIntegrityVerdict === 'MEETS_STRONG_INTEGRITY') {
+      score += 0.3;
+    } else if (hw.playIntegrityVerdict === 'MEETS_DEVICE_INTEGRITY') {
+      score += 0.2;
+    } else {
+      limitations.push('Play Integrity validation incomplete — possible custom ROM or root');
+    }
+
+    if (hw.screenLockEnabled) {
+      score += 0.15;
+    } else {
+      limitations.push('Device screen lock not configured');
+    }
+
+    if (hw.imei1) {
+      score += 0.05;
+    }
+  } else if (os === DeviceOS.IOS || os === DeviceOS.IPADOS) {
+    score = 0.95; // Apple Hardware Enclave & Supervised MDM
+  }
+
+  return {
+    score: Math.min(1.0, Math.max(0.2, score)),
+    limitations
+  };
 }
 
 export async function enrollDevice(input: EnrollmentInput) {
@@ -134,6 +193,12 @@ export async function enrollDevice(input: EnrollmentInput) {
           secureBoot: input.hardware.secureBoot,
           uefiEnabled: input.hardware.uefiEnabled,
           devicePublicKey: input.hardware.devicePublicKey ?? device.identity.devicePublicKey,
+          imei1: input.hardware.imei1 ?? device.identity.imei1,
+          imei2: input.hardware.imei2 ?? device.identity.imei2,
+          androidId: input.hardware.androidId ?? device.identity.androidId,
+          appleUDID: input.hardware.appleUDID ?? device.identity.appleUDID,
+          playIntegrityVerdict: input.hardware.playIntegrityVerdict ?? device.identity.playIntegrityVerdict,
+          screenLockEnabled: input.hardware.screenLockEnabled ?? device.identity.screenLockEnabled,
           identityHash  // Recomputed hash
         }
       });
@@ -154,6 +219,12 @@ export async function enrollDevice(input: EnrollmentInput) {
           secureBoot: input.hardware.secureBoot,
           uefiEnabled: input.hardware.uefiEnabled,
           devicePublicKey: input.hardware.devicePublicKey,
+          imei1: input.hardware.imei1,
+          imei2: input.hardware.imei2,
+          androidId: input.hardware.androidId,
+          appleUDID: input.hardware.appleUDID,
+          playIntegrityVerdict: input.hardware.playIntegrityVerdict,
+          screenLockEnabled: input.hardware.screenLockEnabled,
           identityHash
         }
       });
@@ -203,11 +274,14 @@ export async function enrollDevice(input: EnrollmentInput) {
       }
     }
 
-    // 5. Update device with new OS
+    // 5. Update device with new OS and capability-based confidence score
+    const confidence = computeConfidenceScore(input.hardware, input.os);
     await tx.device.update({
       where: { id: device.id },
       data: {
         currentOS: input.os,
+        confidenceScore: confidence.score,
+        tamperAlerts: confidence.limitations.length > 0 ? ({ limitations: confidence.limitations } as any) : undefined,
         status: device.status === DeviceStatus.PENDING_ENROLLMENT
           ? DeviceStatus.AVAILABLE
           : device.status

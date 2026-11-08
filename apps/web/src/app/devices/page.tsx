@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Laptop,
+  Smartphone,
+  Tablet,
   ShieldCheck,
   Lock,
   Unlock,
@@ -14,7 +16,11 @@ import {
   Key,
   X,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  QrCode,
+  Download,
+  Filter,
+  CheckCheck
 } from 'lucide-react';
 import { apiDevices, Device } from '../../lib/api';
 
@@ -25,6 +31,8 @@ export default function DevicesPage() {
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('ALL');
+  const [selectedManufacturer, setSelectedManufacturer] = useState('ALL');
+  const [selectedPlatform, setSelectedPlatform] = useState('ALL');
 
   // Register Device Modal
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -33,6 +41,8 @@ export default function DevicesPage() {
     serialNumber: '',
     manufacturer: 'HP',
     model: '',
+    deviceType: 'LAPTOP',
+    operatingSystem: 'WINDOWS',
     purchasePrice: 1200000,
     condition: 'EXCELLENT',
     notes: ''
@@ -45,12 +55,17 @@ export default function DevicesPage() {
   const [commandReason, setCommandReason] = useState('Scheduled payment defaulted beyond grace period');
   const [executingCommand, setExecutingCommand] = useState(false);
 
+  // Provisioning Modal (Android Enterprise QR / Apple MDM profile)
+  const [provisioningDevice, setProvisioningDevice] = useState<Device | null>(null);
+
   const loadDevices = async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await apiDevices.list({
         status: selectedFilter !== 'ALL' ? selectedFilter : undefined,
+        manufacturer: selectedManufacturer !== 'ALL' ? selectedManufacturer : undefined,
+        platform: selectedPlatform !== 'ALL' ? selectedPlatform : undefined,
         search: searchTerm || undefined
       });
       setDevices(data.devices || []);
@@ -64,7 +79,7 @@ export default function DevicesPage() {
 
   useEffect(() => {
     loadDevices();
-  }, [selectedFilter]);
+  }, [selectedFilter, selectedManufacturer, selectedPlatform]);
 
   const handleRegisterDevice = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,12 +96,14 @@ export default function DevicesPage() {
         purchasePrice: Number(deviceForm.purchasePrice) || undefined
       });
 
-      setActionSuccess(`Laptop ${res.device.model} (${res.device.serialNumber}) registered in inventory.`);
+      setActionSuccess(`Device ${res.device.model} (${res.device.serialNumber}) registered in inventory.`);
       setIsRegisterModalOpen(false);
       setDeviceForm({
         serialNumber: '',
         manufacturer: 'HP',
         model: '',
+        deviceType: 'LAPTOP',
+        operatingSystem: 'WINDOWS',
         purchasePrice: 1200000,
         condition: 'EXCELLENT',
         notes: ''
@@ -149,10 +166,10 @@ export default function DevicesPage() {
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Laptop className="w-6 h-6 text-cyan-400" />
-            Device Inventory & Remote Lock Control
+            Universal Fleet & Device Security Hub
           </h1>
           <p className="text-slate-400 text-sm mt-0.5">
-            Monitor hardware identity, TPM attestation, and dispatch digitally signed commands.
+            Cross-brand management for Windows, Linux, Android Enterprise, and Apple MDM with cryptographic locks.
           </p>
         </div>
 
@@ -190,32 +207,75 @@ export default function DevicesPage() {
       )}
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel p-4 rounded-xl border border-slate-800">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-          <input
-            type="text"
-            placeholder="Search by serial number, model, or customer..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-900/80 border border-slate-700/80 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
-          />
+      <div className="glass-panel p-4 rounded-xl border border-slate-800 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+            <input
+              type="text"
+              placeholder="Search serial, model, brand, or borrower..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-slate-900/80 border border-slate-700/80 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto text-xs">
+            {['ALL', 'AVAILABLE', 'ACTIVE', 'RESTRICTED', 'GRACE_PERIOD', 'CUSTOMER_OWNED'].map(f => (
+              <button
+                key={f}
+                onClick={() => setSelectedFilter(f)}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                  selectedFilter === f
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                {f.replace('_', ' ')}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto text-xs">
-          {['ALL', 'AVAILABLE', 'ACTIVE', 'RESTRICTED', 'GRACE_PERIOD', 'CUSTOMER_OWNED'].map(f => (
-            <button
-              key={f}
-              onClick={() => setSelectedFilter(f)}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                selectedFilter === f
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-              }`}
+        {/* Secondary Universal Filters */}
+        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-800/60 text-xs text-slate-400">
+          <div className="flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-slate-500" />
+            <span>Brand:</span>
+            <select
+              value={selectedManufacturer}
+              onChange={e => setSelectedManufacturer(e.target.value)}
+              className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none focus:border-cyan-500"
             >
-              {f.replace('_', ' ')}
-            </button>
-          ))}
+              <option value="ALL">All Manufacturers</option>
+              <option value="HP">HP</option>
+              <option value="Dell">Dell</option>
+              <option value="Lenovo">Lenovo</option>
+              <option value="Samsung">Samsung</option>
+              <option value="Tecno">Tecno</option>
+              <option value="Infinix">Infinix</option>
+              <option value="Apple">Apple</option>
+              <option value="Xiaomi">Xiaomi</option>
+              <option value="OPPO">OPPO</option>
+              <option value="Asus">Asus</option>
+              <option value="Acer">Acer</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span>Platform:</span>
+            <select
+              value={selectedPlatform}
+              onChange={e => setSelectedPlatform(e.target.value)}
+              className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none focus:border-cyan-500"
+            >
+              <option value="ALL">All Platforms</option>
+              <option value="Windows">Windows Service</option>
+              <option value="Linux">Linux systemd</option>
+              <option value="Android">Android Enterprise</option>
+              <option value="Apple">Apple MDM</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -229,9 +289,9 @@ export default function DevicesPage() {
         ) : filteredDevices.length === 0 ? (
           <div className="p-12 text-center text-slate-400">
             <Laptop className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-            <div className="text-base font-semibold text-white">No devices found</div>
+            <div className="text-base font-semibold text-white">No devices found matching filters</div>
             <p className="text-xs text-slate-400 mt-1">
-              Click &quot;Register Device&quot; to onboard your first laptop with serial numbers.
+              Click &quot;Register Device&quot; to onboard your first laptop, smartphone or tablet.
             </p>
           </div>
         ) : (
@@ -240,10 +300,10 @@ export default function DevicesPage() {
               <thead className="bg-slate-900/60 border-b border-slate-800 text-slate-400 text-xs font-semibold uppercase tracking-wider">
                 <tr>
                   <th className="p-4 pl-6">Hardware Profile</th>
-                  <th className="p-4">OS / TPM</th>
+                  <th className="p-4">OS & Security Level</th>
                   <th className="p-4">Protection Status</th>
-                  <th className="p-4">Agreement Context</th>
-                  <th className="p-4 text-right pr-6">Remote Actions</th>
+                  <th className="p-4">Borrower / Contract</th>
+                  <th className="p-4 text-right pr-6">Management Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-slate-200">
@@ -255,27 +315,53 @@ export default function DevicesPage() {
                   return (
                     <tr key={device.id} className="hover:bg-slate-800/30 transition-colors">
                       <td className="p-4 pl-6">
-                        <div className="font-semibold text-white">
-                          {device.manufacturer} {device.model}
-                        </div>
-                        <div className="text-xs font-mono text-cyan-400 flex items-center gap-1.5 mt-0.5">
-                          <span>S/N: {device.serialNumber}</span>
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-300">
+                            {device.currentOS === 'ANDROID' || device.currentOS === 'IOS' ? (
+                              <Smartphone className="w-5 h-5 text-indigo-400" />
+                            ) : (
+                              <Laptop className="w-5 h-5 text-cyan-400" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-white flex items-center gap-1.5">
+                              <span>{device.manufacturer} {device.model}</span>
+                              {device.platform && (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-normal">
+                                  {device.platform.split(' ')[0]}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs font-mono text-cyan-400 flex items-center gap-1.5 mt-0.5">
+                              <span>S/N: {device.serialNumber}</span>
+                            </div>
+                          </div>
                         </div>
                       </td>
 
                       <td className="p-4">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-slate-800 border border-slate-700">
-                            {device.currentOS || 'WINDOWS'}
-                          </span>
-                          {device.identity?.tpmPresent !== false ? (
-                            <span className="flex items-center gap-1 text-[11px] text-emerald-400" title="TPM 2.0 Attested">
-                              <Cpu className="w-3.5 h-3.5" />
-                              TPM 2.0
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-slate-800 border border-slate-700 text-slate-300">
+                              {device.currentOS || 'WINDOWS'}
                             </span>
-                          ) : (
-                            <span className="text-[11px] text-slate-500">Standard</span>
-                          )}
+                            {device.confidenceScore !== undefined && (
+                              <span
+                                className={`text-[11px] font-semibold flex items-center gap-1 ${
+                                  device.confidenceScore >= 0.8 ? 'text-emerald-400' : 'text-amber-400'
+                                }`}
+                                title={`Hardware confidence: ${Math.round((device.confidenceScore || 1) * 100)}%`}
+                              >
+                                <Cpu className="w-3.5 h-3.5" />
+                                {Math.round((device.confidenceScore || 1) * 100)}% Trust
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-400">
+                            {device.currentOS === 'ANDROID' ? 'Device Owner Kiosk Ready' :
+                             device.currentOS === 'IOS' ? 'Supervised Apple MDM' :
+                             device.identity?.tpmPresent !== false ? 'TPM 2.0 & BitLocker' : 'Standard Agent'}
+                          </div>
                         </div>
                       </td>
 
@@ -305,6 +391,7 @@ export default function DevicesPage() {
                         )}
                         {device.status === 'CUSTOMER_OWNED' && (
                           <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center gap-1 w-fit">
+                            <CheckCheck className="w-3.5 h-3.5" />
                             Customer Owned
                           </span>
                         )}
@@ -319,6 +406,11 @@ export default function DevicesPage() {
                             <div className="text-[11px] text-slate-400 font-mono mt-0.5">
                               {activeHP?.agreementNumber || activeRental?.agreementNumber}
                             </div>
+                            {activeHP?.remainingBalanceTZS !== undefined && (
+                              <div className="text-[11px] text-emerald-400 font-mono font-medium">
+                                Bal: TZS {activeHP.remainingBalanceTZS.toLocaleString()}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <span className="text-slate-500 italic">Unassigned</span>
@@ -327,6 +419,17 @@ export default function DevicesPage() {
 
                       <td className="p-4 pr-6 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          {/* Provisioning Shortcut for Mobile Devices */}
+                          {(device.currentOS === 'ANDROID' || device.currentOS === 'IOS') && (
+                            <button
+                              onClick={() => setProvisioningDevice(device)}
+                              title="Provisioning Profile / QR"
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-400 border border-slate-700 transition-colors"
+                            >
+                              <QrCode className="w-4 h-4" />
+                            </button>
+                          )}
+
                           {device.status === 'RESTRICTED' ? (
                             <button
                               onClick={() => {
@@ -370,7 +473,7 @@ export default function DevicesPage() {
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Laptop className="w-5 h-5 text-emerald-400" />
-                <h2 className="text-lg font-bold text-white">Register Hardware Fleet Device</h2>
+                <h2 className="text-lg font-bold text-white">Register Universal Fleet Hardware</h2>
               </div>
               <button
                 onClick={() => setIsRegisterModalOpen(false)}
@@ -383,16 +486,53 @@ export default function DevicesPage() {
             <form onSubmit={handleRegisterDevice} className="space-y-4 mt-4">
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Serial Number (Hardware S/N) *
+                  Serial Number or IMEI *
                 </label>
                 <input
                   type="text"
                   required
                   value={deviceForm.serialNumber}
                   onChange={e => setDeviceForm({ ...deviceForm, serialNumber: e.target.value })}
-                  placeholder="e.g. 5CD2348ABC or LX-8894-HP15"
+                  placeholder="e.g. 5CD2348ABC or 356892110293845"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-emerald-500"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Device Category *</label>
+                  <select
+                    value={deviceForm.deviceType}
+                    onChange={e => {
+                      const t = e.target.value;
+                      setDeviceForm({
+                        ...deviceForm,
+                        deviceType: t,
+                        operatingSystem: t === 'SMARTPHONE' || t === 'TABLET' ? 'ANDROID' : 'WINDOWS'
+                      });
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="LAPTOP">Laptop Computer</option>
+                    <option value="DESKTOP">Desktop Computer</option>
+                    <option value="SMARTPHONE">Android / iPhone Smartphone</option>
+                    <option value="TABLET">Tablet Device</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Operating System *</label>
+                  <select
+                    value={deviceForm.operatingSystem}
+                    onChange={e => setDeviceForm({ ...deviceForm, operatingSystem: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="WINDOWS">Windows (10 / 11)</option>
+                    <option value="LINUX">Linux (Ubuntu / Fedora / Debian)</option>
+                    <option value="ANDROID">Android Enterprise</option>
+                    <option value="IOS">Apple iOS / iPadOS</option>
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -403,12 +543,24 @@ export default function DevicesPage() {
                     onChange={e => setDeviceForm({ ...deviceForm, manufacturer: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
                   >
-                    <option value="HP">HP</option>
-                    <option value="Dell">Dell</option>
-                    <option value="Lenovo">Lenovo</option>
-                    <option value="Apple">Apple</option>
-                    <option value="Asus">Asus</option>
-                    <option value="Acer">Acer</option>
+                    <optgroup label="Computers">
+                      <option value="HP">HP</option>
+                      <option value="Dell">Dell</option>
+                      <option value="Lenovo">Lenovo</option>
+                      <option value="Asus">Asus</option>
+                      <option value="Acer">Acer</option>
+                    </optgroup>
+                    <optgroup label="Smartphones & Mobile">
+                      <option value="Samsung">Samsung</option>
+                      <option value="Tecno">Tecno</option>
+                      <option value="Infinix">Infinix</option>
+                      <option value="Apple">Apple</option>
+                      <option value="Xiaomi">Xiaomi</option>
+                      <option value="OPPO">OPPO</option>
+                      <option value="Google">Google Pixel</option>
+                      <option value="OnePlus">OnePlus</option>
+                      <option value="Motorola">Motorola</option>
+                    </optgroup>
                   </select>
                 </div>
                 <div>
@@ -418,7 +570,7 @@ export default function DevicesPage() {
                     required
                     value={deviceForm.model}
                     onChange={e => setDeviceForm({ ...deviceForm, model: e.target.value })}
-                    placeholder="e.g. EliteBook 840 G8"
+                    placeholder="e.g. Camon 30 Pro or EliteBook 840"
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
                   />
                 </div>
@@ -426,7 +578,7 @@ export default function DevicesPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Purchase Cost (TZS)</label>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Acquisition Cost (TZS)</label>
                   <input
                     type="number"
                     value={deviceForm.purchasePrice}
@@ -441,21 +593,21 @@ export default function DevicesPage() {
                     onChange={e => setDeviceForm({ ...deviceForm, condition: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
                   >
-                    <option value="EXCELLENT">Brand New / Excellent</option>
+                    <option value="EXCELLENT">Brand New / Factory Sealed</option>
                     <option value="GOOD">Refurbished - Grade A</option>
-                    <option value="FAIR">Used - Grade B</option>
+                    <option value="FAIR">Used - Functional</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Notes / Asset Tag</label>
-                <textarea
-                  rows={2}
+                <label className="block text-xs font-medium text-slate-300 mb-1">Internal Notes</label>
+                <input
+                  type="text"
                   value={deviceForm.notes}
                   onChange={e => setDeviceForm({ ...deviceForm, notes: e.target.value })}
-                  placeholder="Asset tag number, supplier invoice number, or RAM/SSD configuration"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 resize-none"
+                  placeholder="Asset tag, branch allocation, financing tier"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
@@ -472,7 +624,7 @@ export default function DevicesPage() {
                   disabled={submittingDevice}
                   className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-navy-950 text-sm font-bold disabled:opacity-50"
                 >
-                  {submittingDevice ? 'Saving to Database...' : 'Register Laptop'}
+                  {submittingDevice ? 'Saving...' : 'Register Device'}
                 </button>
               </div>
             </form>
@@ -484,70 +636,161 @@ export default function DevicesPage() {
       {commandModalOpen && selectedDevice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
-            <div className="flex items-center gap-3 mb-4">
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                  commandType === 'RESTRICT'
-                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                    : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                }`}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Key className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-base font-bold text-white">Dispatch Cryptographic Command</h3>
+              </div>
+              <button
+                onClick={() => setCommandModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
               >
-                {commandType === 'RESTRICT' ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-white">
-                  {commandType === 'RESTRICT' ? 'Lock & Restrict Laptop' : 'Restore Laptop Access'}
-                </h3>
-                <p className="text-xs text-slate-400">
-                  Target: {selectedDevice.manufacturer} {selectedDevice.model} ({selectedDevice.serialNumber})
-                </p>
-              </div>
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="space-y-4 my-4">
+            <div className="space-y-4 mt-4">
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs">
+                <div className="text-slate-400">Target Hardware:</div>
+                <div className="font-semibold text-white mt-0.5">
+                  {selectedDevice.manufacturer} {selectedDevice.model}
+                </div>
+                <div className="font-mono text-cyan-400 text-[11px] mt-0.5">
+                  S/N: {selectedDevice.serialNumber}
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Reason for Command (Audit Log Record)
-                </label>
-                <textarea
-                  rows={3}
+                <label className="block text-xs font-medium text-slate-300 mb-1">Action Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCommandType('RESTRICT')}
+                    className={`py-2 rounded-xl text-xs font-semibold border transition-colors flex items-center justify-center gap-1.5 ${
+                      commandType === 'RESTRICT'
+                        ? 'bg-rose-500/20 border-rose-500 text-rose-300'
+                        : 'border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    Lock Device
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCommandType('RESTORE')}
+                    className={`py-2 rounded-xl text-xs font-semibold border transition-colors flex items-center justify-center gap-1.5 ${
+                      commandType === 'RESTORE'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                        : 'border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    <Unlock className="w-3.5 h-3.5" />
+                    Restore Access
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Reason for Command</label>
+                <input
+                  type="text"
                   value={commandReason}
                   onChange={e => setCommandReason(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500 resize-none"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
-              <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 text-xs text-slate-300 space-y-1">
-                <div className="font-semibold text-white flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-                  Hardware-Enforced Command
-                </div>
-                <div>
-                  This action signs an ES256 payload verified by the local Windows/Linux HatLock agent on boot or heartbeat.
-                </div>
+              <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCommandModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleExecuteCommand}
+                  disabled={executingCommand}
+                  className={`px-5 py-2 rounded-xl text-navy-950 text-sm font-bold disabled:opacity-50 flex items-center gap-2 ${
+                    commandType === 'RESTRICT'
+                      ? 'bg-rose-500 hover:bg-rose-400'
+                      : 'bg-emerald-500 hover:bg-emerald-400'
+                  }`}
+                >
+                  {executingCommand ? 'Signing ECDSA P-256...' : `Sign & Send ${commandType}`}
+                </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
 
-            <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-3">
+      {/* Provisioning Modal (Android Enterprise QR Code / Apple MDM profile) */}
+      {provisioningDevice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <QrCode className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-base font-bold text-white">
+                  {provisioningDevice.currentOS === 'ANDROID' ? 'Android Enterprise Provisioning' : 'Apple MDM Enrollment'}
+                </h3>
+              </div>
               <button
-                type="button"
-                onClick={() => setCommandModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-sm"
+                onClick={() => setProvisioningDevice(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
               >
-                Cancel
+                <X className="w-5 h-5" />
               </button>
-              <button
-                type="button"
-                disabled={executingCommand}
-                onClick={handleExecuteCommand}
-                className={`px-5 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-50 ${
-                  commandType === 'RESTRICT'
-                    ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-500/20'
-                    : 'bg-emerald-500 hover:bg-emerald-600 text-navy-950 shadow-lg shadow-emerald-500/20'
-                }`}
-              >
-                {executingCommand ? 'Dispatching...' : `Dispatch Signed ${commandType}`}
-              </button>
+            </div>
+
+            <div className="space-y-4 mt-4 text-xs">
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                <div className="text-slate-400">Target Device:</div>
+                <div className="font-semibold text-white mt-0.5">
+                  {provisioningDevice.manufacturer} {provisioningDevice.model} (S/N: {provisioningDevice.serialNumber})
+                </div>
+              </div>
+
+              {provisioningDevice.currentOS === 'ANDROID' ? (
+                <div className="space-y-3">
+                  <p className="text-slate-300">
+                    To provision this Android smartphone as a <strong>Fully Managed Device Owner</strong>:
+                  </p>
+                  <ol className="list-decimal pl-4 space-y-1.5 text-slate-400">
+                    <li>Factory reset or unbox the device.</li>
+                    <li>Tap the &quot;Welcome&quot; setup screen 6 times to open QR setup.</li>
+                    <li>Connect Wi-Fi and scan the HatLock Device Owner QR code.</li>
+                  </ol>
+                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 font-mono text-[11px] text-cyan-300 overflow-x-auto">
+                    GET /api/v1/mdm/android/provisioning-profile/{provisioningDevice.id}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-slate-300">
+                    Apple iPhone / iPad supervised device configuration profile:
+                  </p>
+                  <a
+                    href={`/api/v1/mdm/apple/enroll.mobileconfig?deviceId=${provisioningDevice.id}`}
+                    download
+                    className="w-full py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold flex items-center justify-center gap-2 text-xs transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download hatlock-enroll.mobileconfig
+                  </a>
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-slate-800 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setProvisioningDevice(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

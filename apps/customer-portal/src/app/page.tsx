@@ -42,6 +42,7 @@ interface PaymentRecord {
 export default function CustomerDashboard() {
   const [activeTab, setActiveTab] = useState<'agreements' | 'payments'>('agreements');
   const [paymentModal, setPaymentModal] = useState<Agreement | null>(null);
+  const [selectedGateway, setSelectedGateway] = useState<'HATPESA' | 'SONICPESA'>('HATPESA');
   const [phoneNumber, setPhoneNumber] = useState('+255 712 345 678');
   const [paymentAmount, setPaymentAmount] = useState('300000');
   const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null);
@@ -422,6 +423,34 @@ Cryptographic Signature: HMAC-SHA256 VERIFIED
 
             <div className="space-y-4 my-4">
               <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Payment Provider</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGateway('HATPESA')}
+                    className={`py-2 rounded-xl text-xs font-semibold border transition-colors ${
+                      selectedGateway === 'HATPESA'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                        : 'border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    HatPesa Mobile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGateway('SONICPESA')}
+                    className={`py-2 rounded-xl text-xs font-semibold border transition-colors ${
+                      selectedGateway === 'SONICPESA'
+                        ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300'
+                        : 'border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    SonicPesa Gateway
+                  </button>
+                </div>
+              </div>
+
+              <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">M-Pesa / Mobile Phone Number</label>
                 <input
                   type="text"
@@ -464,7 +493,7 @@ Cryptographic Signature: HMAC-SHA256 VERIFIED
                 onClick={handleMakePayment}
                 className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-sm font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
               >
-                {paying ? 'Processing...' : 'Confirm & Pay via M-Pesa'}
+                {paying ? 'Processing...' : `Confirm & Pay via ${selectedGateway === 'HATPESA' ? 'HatPesa' : 'SonicPesa'}`}
               </button>
             </div>
           </div>

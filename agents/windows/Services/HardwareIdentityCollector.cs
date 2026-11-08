@@ -38,7 +38,9 @@ public class HardwareIdentityCollector
             StorageSerials = GetStorageSerials(),
             TpmPresent   = DetectTpm(out var tpmVersion),
             TpmVersion   = tpmVersion,
-            SecureBoot   = DetectSecureBoot()
+            SecureBoot   = DetectSecureBoot(),
+            BitLockerActive = DetectBitLocker(),
+            AutopilotEnrolled = DetectAutopilot()
         };
 
         identity.IdentityHash = ComputeIdentityHash(identity);
@@ -123,6 +125,33 @@ public class HardwareIdentityCollector
         catch { return false; }
     }
 
+    private static bool DetectBitLocker()
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(@"root\CIMV2\Security\MicrosoftVolumeEncryption", "SELECT ProtectionStatus FROM Win32_EncryptableVolume WHERE DriveLetter = 'C:'");
+            foreach (ManagementObject obj in searcher.Get())
+            {
+                if (obj["ProtectionStatus"]?.ToString() == "1")
+                    return true;
+            }
+        }
+        catch { }
+        return false;
+    }
+
+    private static bool DetectAutopilot()
+    {
+        try
+        {
+            // Windows Autopilot registration markers in registry
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Provisioning\AutopilotPolicy");
+            return key != null;
+        }
+        catch { }
+        return false;
+    }
+
     private static string ComputeIdentityHash(HardwareIdentity id)
     {
         var fields = string.Join("|",
@@ -151,5 +180,7 @@ public record HardwareIdentity
     public bool TpmPresent { get; set; }
     public string? TpmVersion { get; set; }
     public bool SecureBoot { get; set; }
+    public bool BitLockerActive { get; set; }
+    public bool AutopilotEnrolled { get; set; }
     public string IdentityHash { get; set; } = "";
 }

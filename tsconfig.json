@@ -16,7 +16,8 @@
     "paths": {
       "@hatlock/shared": ["./packages/shared/src/index.ts"],
       "@hatlock/database": ["./packages/database/src/index.ts"],
-      "@hatlock/hatpesa": ["./packages/hatpesa/src/index.ts"]
+      "@hatlock/hatpesa": ["./packages/hatpesa/src/index.ts"],
+      "@hatlock/sonicpesa": ["./packages/sonicpesa/src/index.ts"]
     }
   },
   "files": [],

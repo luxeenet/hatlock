@@ -14,6 +14,8 @@ const DeviceCreateSchema = z.object({
   branchId: z.string().uuid().optional(),
   purchasePrice: z.number().positive().optional(),
   condition: z.string().default('EXCELLENT'),
+  deviceType: z.string().optional(),
+  operatingSystem: z.string().optional(),
   notes: z.string().optional()
 });
 
@@ -27,25 +29,50 @@ export async function deviceRoutes(server: FastifyInstance) {
   server.addHook('preHandler', server.authenticate);
 
   // List devices for current business
+  // List devices
   server.get('/', {
     schema: {
       tags: ['Devices'],
-      summary: 'List device inventory with filters'
+      summary: 'List device inventory with universal multi-brand and platform filters'
     }
   }, async (request: FastifyRequest<{
-    Querystring: { status?: string; branchId?: string; search?: string }
+    Querystring: {
+      status?: string;
+      branchId?: string;
+      search?: string;
+      manufacturer?: string;
+      platform?: string;
+      os?: string;
+      complianceStatus?: string;
+      deviceType?: string;
+      customerId?: string;
+      agreementId?: string;
+    }
   }>, reply: FastifyReply) => {
     const businessId = (request as any).businessId;
-    const { status, branchId, search } = request.query;
+    const { status, branchId, search, manufacturer, platform, os, complianceStatus, deviceType, customerId, agreementId } = request.query;
 
     const where: any = { businessId };
     if (status) where.status = status as DeviceStatus;
     if (branchId) where.branchId = branchId;
+    if (manufacturer) where.manufacturer = { equals: manufacturer, mode: 'insensitive' };
+    if (platform) where.platform = { contains: platform, mode: 'insensitive' };
+    if (os) where.currentOS = os as DeviceOS;
+    if (complianceStatus) where.complianceStatus = complianceStatus;
+    if (deviceType) where.deviceType = deviceType as any;
+    if (customerId) where.currentCustomerId = customerId;
+    if (agreementId) {
+      where.OR = [
+        { financingAgreements: { some: { id: agreementId } } },
+        { rentalAgreements: { some: { id: agreementId } } }
+      ];
+    }
     if (search) {
       where.OR = [
         { serialNumber: { contains: search, mode: 'insensitive' } },
         { model: { contains: search, mode: 'insensitive' } },
-        { manufacturer: { contains: search, mode: 'insensitive' } }
+        { manufacturer: { contains: search, mode: 'insensitive' } },
+        { assetTag: { contains: search, mode: 'insensitive' } }
       ];
     }
 
@@ -55,13 +82,14 @@ export async function deviceRoutes(server: FastifyInstance) {
         branch: { select: { id: true, name: true } },
         agentInfo: true,
         identity: true,
+        restrictions: { where: { isActive: true } },
         financingAgreements: {
           where: { status: { notIn: ['COMPLETED', 'TERMINATED', 'CANCELLED', 'OWNERSHIP_TRANSFERRED'] } },
-          include: { customer: { select: { id: true, firstName: true, lastName: true } } }
+          include: { customer: { select: { id: true, firstName: true, lastName: true, phone: true } } }
         },
         rentalAgreements: {
           where: { status: { notIn: ['COMPLETED', 'TERMINATED', 'CANCELLED', 'EXPIRED', 'RETURNED'] } },
-          include: { customer: { select: { id: true, firstName: true, lastName: true } } }
+          include: { customer: { select: { id: true, firstName: true, lastName: true, phone: true } } }
         }
       },
       orderBy: { createdAt: 'desc' }
@@ -74,7 +102,7 @@ export async function deviceRoutes(server: FastifyInstance) {
   server.post('/', {
     schema: {
       tags: ['Devices'],
-      summary: 'Register new laptop into inventory'
+      summary: 'Register new device into inventory'
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const businessId = (request as any).businessId;
@@ -94,14 +122,15 @@ export async function deviceRoutes(server: FastifyInstance) {
       });
     }
 
-    const { condition, ...devRest } = parse.data;
+    const { condition, deviceType, operatingSystem, ...devRest } = parse.data;
     const device = await prisma.device.create({
       data: {
         ...devRest,
         physicalCondition: condition,
+        deviceType: (deviceType || 'LAPTOP') as any,
         businessId,
         status: DeviceStatus.AVAILABLE,
-        currentOS: DeviceOS.WINDOWS
+        currentOS: (operatingSystem || DeviceOS.UNKNOWN) as DeviceOS
       }
     });
 

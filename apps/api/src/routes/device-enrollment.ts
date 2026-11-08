@@ -22,13 +22,19 @@ const HardwareIdentitySchema = z.object({
   tpmEKCertHash: z.string().optional(),
   secureBoot: z.boolean().optional(),
   uefiEnabled: z.boolean().optional(),
-  devicePublicKey: z.string().optional()
+  devicePublicKey: z.string().optional(),
+  imei1: z.string().optional(),
+  imei2: z.string().optional(),
+  androidId: z.string().optional(),
+  appleUDID: z.string().optional(),
+  screenLockEnabled: z.boolean().optional(),
+  playIntegrityVerdict: z.string().optional()
 });
 
 const EnrollRequestSchema = z.object({
   enrollmentToken: z.string().min(1),
   hardware: HardwareIdentitySchema,
-  os: z.enum(['WINDOWS', 'LINUX']),
+  os: z.enum(['WINDOWS', 'LINUX', 'ANDROID', 'IOS', 'MACOS', 'IPADOS', 'UNKNOWN']).default('UNKNOWN'),
   osVersion: z.string().optional(),
   distro: z.string().optional(),
   agentVersion: z.string().min(1)
