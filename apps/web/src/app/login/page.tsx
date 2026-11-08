@@ -1,26 +1,31 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ShieldCheck,
   Lock,
   Mail,
   ArrowRight,
   AlertCircle,
-  CheckCircle2,
-  KeyRound,
-  Laptop,
-  Sparkles
+  CheckCircle2
 } from 'lucide-react';
+import { API_BASE } from '../../lib/api';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (searchParams.get('expired') === '1') {
+      setError('Your session has expired. Please sign in again.');
+    }
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,63 +34,43 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === 'production' ? 'https://api.luxeenet.com' : 'http://localhost:3000');
-      const res = await fetch(`${apiUrl}/api/v1/auth/login`, {
+      const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(data.message || data.error || 'Authentication failed');
+        throw new Error(data.message || data.error || 'Authentication failed. Please check your credentials.');
       }
 
-      // Store auth session
-      if (data.accessToken) {
-        localStorage.setItem('hatlock_token', data.accessToken);
+      if (!data.accessToken || !data.user) {
+        throw new Error('Invalid authentication response received from server.');
       }
+
+      // Store authentic backend session tokens
+      localStorage.setItem('hatlock_token', data.accessToken);
       if (data.refreshToken) {
         localStorage.setItem('hatlock_refresh_token', data.refreshToken);
       }
-      if (data.user) {
-        localStorage.setItem('hatlock_user', JSON.stringify(data.user));
-      }
+      localStorage.setItem('hatlock_user', JSON.stringify(data.user));
 
-      setSuccess('Authenticated successfully! Redirecting...');
+      setSuccess('Authenticated successfully! Redirecting to workspace...');
       setTimeout(() => {
         router.push('/');
-      }, 700);
+      }, 600);
     } catch (err: any) {
-      console.warn('API authentication error:', err);
-      // If server is unreachable or demo testing
-      if (err.message.includes('fetch') || err.message.includes('Failed to fetch')) {
-        // Fallback demo login
-        localStorage.setItem(
-          'hatlock_user',
-          JSON.stringify({
-            email,
-            role: email.includes('admin') ? 'SUPER_ADMIN' : 'BUSINESS_OWNER',
-          })
-        );
-        localStorage.setItem('hatlock_token', 'demo_jwt_token_local');
-        setSuccess('Logged in via offline local demo credentials! Redirecting...');
-        setTimeout(() => {
-          router.push('/');
-        }, 700);
+      // Never create fake local sessions or fallback demo tokens
+      if (err.name === 'TypeError' || err.message.includes('fetch') || err.message.includes('Failed to fetch')) {
+        setError('Unable to reach the HatLock authentication service. Please check your network connection.');
       } else {
-        setError(err.message || 'Invalid credentials. Please verify your email and password.');
+        setError(err.message || 'Invalid email or password.');
       }
     } finally {
       setLoading(false);
     }
-  };
-
-  const fillCredentials = (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setError(null);
   };
 
   return (
@@ -117,7 +102,7 @@ export default function LoginPage() {
           <div className="mb-6">
             <h2 className="text-lg font-semibold text-white">Sign In to Workspace</h2>
             <p className="text-xs text-slate-400 mt-1">
-              Authenticate to manage hardware inventory and loan contracts.
+              Enter your verified credentials to access your administrative dashboard.
             </p>
           </div>
 
@@ -145,9 +130,10 @@ export default function LoginPage() {
                 <input
                   type="email"
                   required
+                  autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@hatlock.local"
+                  placeholder="name@business.com"
                   className="w-full bg-slate-950/60 border border-slate-800 focus:border-emerald-500/80 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
                 />
               </div>
@@ -162,6 +148,7 @@ export default function LoginPage() {
                 <input
                   type="password"
                   required
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
@@ -173,7 +160,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-semibold py-2.5 px-4 rounded-xl text-sm transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 group"
+              className="w-full mt-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-semibold py-2.5 px-4 rounded-xl text-sm transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 group cursor-pointer"
             >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
@@ -185,37 +172,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          {/* 1-Click Demo Logins for Quick Testing */}
-          <div className="mt-6 pt-5 border-t border-slate-800/80">
-            <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <Sparkles className="w-3 h-3 text-amber-400" />
-              Quick Fill Seed Accounts
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => fillCredentials('admin@hatlock.local', 'Admin@123456')}
-                className="p-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/60 text-slate-300 hover:text-white transition-colors text-left flex flex-col"
-              >
-                <span className="font-semibold text-emerald-400 flex items-center gap-1">
-                  <KeyRound className="w-3 h-3" /> Super Admin
-                </span>
-                <span className="text-[10px] text-slate-400 truncate mt-0.5">admin@hatlock.local</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fillCredentials('business@demo.local', 'Admin@123456')}
-                className="p-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/60 text-slate-300 hover:text-white transition-colors text-left flex flex-col"
-              >
-                <span className="font-semibold text-cyan-400 flex items-center gap-1">
-                  <Laptop className="w-3 h-3" /> Merchant Admin
-                </span>
-                <span className="text-[10px] text-slate-400 truncate mt-0.5">business@demo.local</span>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
@@ -224,5 +180,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

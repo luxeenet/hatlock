@@ -19,3 +19,4 @@ export function phoneNumbersMatch(phoneA?: string | null, phoneB?: string | null
   const normB = normalizePhoneNumber(phoneB);
   return normA.length >= 7 && normA === normB;
 }
+

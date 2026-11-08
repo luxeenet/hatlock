@@ -41,6 +41,7 @@ import { agentRoutes } from './routes/agents.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { androidMdmRoutes } from './routes/android-mdm.js';
 import { appleMdmRoutes } from './routes/apple-mdm.js';
+import { portalRoutes } from './routes/portal.js';
 
 // Hooks
 import { tenantMiddleware } from './middleware/tenant.js';
@@ -216,6 +217,7 @@ async function buildServer() {
   await server.register(auditRoutes, { prefix: '/api/v1/audit' });
   await server.register(supportRoutes, { prefix: '/api/v1/support' });
   await server.register(dashboardRoutes, { prefix: '/api/v1/dashboard' });
+  await server.register(portalRoutes, { prefix: '/api/v1/portal' });
 
   // Luxeenet super-admin routes (elevated auth required)
   await server.register(superAdminRoutes, { prefix: '/api/v1/admin' });

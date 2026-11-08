@@ -20,6 +20,13 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   const response = await fetch(url, { ...options, headers });
   
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      localStorage.removeItem('hatlock_token');
+      localStorage.removeItem('hatlock_refresh_token');
+      localStorage.removeItem('hatlock_user');
+      window.location.href = '/login?expired=1';
+    }
+
     let errorMsg = `Request failed: ${response.status} ${response.statusText}`;
     try {
       const errorJson = await response.json();

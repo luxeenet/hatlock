@@ -48,6 +48,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<UserInfo | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   // Notification Drawer State
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -89,15 +90,39 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('hatlock_user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
-        setUser(null);
-      }
+    if (pathname === '/login') {
+      setAuthChecked(true);
+      return;
     }
-  }, [pathname]);
+
+    const token = localStorage.getItem('hatlock_token');
+    const storedUser = localStorage.getItem('hatlock_user');
+
+    if (!token || !storedUser) {
+      setUser(null);
+      router.replace('/login');
+      return;
+    }
+
+    try {
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+
+      // Super admin page protection
+      if (pathname === '/super-admin' && parsedUser.role !== 'SUPER_ADMIN') {
+        router.replace('/');
+        return;
+      }
+    } catch {
+      localStorage.removeItem('hatlock_token');
+      localStorage.removeItem('hatlock_user');
+      setUser(null);
+      router.replace('/login');
+      return;
+    }
+
+    setAuthChecked(true);
+  }, [pathname, router]);
 
   // Click outside to close notifications
   useEffect(() => {
@@ -135,6 +160,16 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   // If on /login page, don't show the dashboard shell (sidebar & header)
   if (pathname === '/login') {
     return <main className="min-h-screen bg-navy-950 text-slate-100">{children}</main>;
+  }
+
+  // Prevent flash of protected dashboard content before authentication is verified
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-navy-950 flex flex-col items-center justify-center text-slate-400">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-xs tracking-wide uppercase font-semibold text-slate-500">Verifying session security...</p>
+      </div>
+    );
   }
 
   const primaryNavLinks = [

@@ -1,7 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { customerApi, API_BASE } from '../lib/api';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  customerApi,
+  CustomerAgreement,
+  CustomerPaymentRecord,
+  CustomerPortalData
+} from '../lib/api';
 import {
   Laptop,
   CreditCard,
@@ -16,78 +22,63 @@ import {
   Smartphone,
   ArrowRight,
   X,
-  FileSpreadsheet
+  LogOut,
+  RefreshCw,
+  User,
+  ShieldAlert
 } from 'lucide-react';
 
-interface Agreement {
-  id: string;
-  type: 'HIRE_PURCHASE' | 'RENTAL';
-  agreementNumber: string;
-  device: string;
-  serialNumber: string;
-  status: 'ACTIVE' | 'GRACE_PERIOD' | 'RESTRICTED' | 'OWNERSHIP_TRANSFERRED' | 'COMPLETED';
-  totalAmountTZS: number;
-  paidAmountTZS: number;
-  nextDueDateStr: string;
-  nextInstalmentTZS: number;
-  ownershipNote: string;
-}
-
-interface PaymentRecord {
-  reference: string;
-  amountTZS: number;
-  date: string;
-  status: 'SUCCESS' | 'PENDING';
-}
-
 export default function CustomerDashboard() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [customer, setCustomer] = useState<CustomerPortalData['customer'] | null>(null);
+  const [agreements, setAgreements] = useState<CustomerAgreement[]>([]);
+  const [payments, setPayments] = useState<CustomerPaymentRecord[]>([]);
+
   const [activeTab, setActiveTab] = useState<'agreements' | 'payments'>('agreements');
-  const [paymentModal, setPaymentModal] = useState<Agreement | null>(null);
+  const [paymentModal, setPaymentModal] = useState<CustomerAgreement | null>(null);
   const [selectedGateway, setSelectedGateway] = useState<'HATPESA' | 'SONICPESA'>('HATPESA');
-  const [phoneNumber, setPhoneNumber] = useState('+255 712 345 678');
-  const [paymentAmount, setPaymentAmount] = useState('300000');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null);
   const [paymentPendingNotice, setPaymentPendingNotice] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
 
-  const [agreements, setAgreements] = useState<Agreement[]>([
-    {
-      id: 'a1',
-      type: 'HIRE_PURCHASE',
-      agreementNumber: 'HP-2026-000102',
-      device: 'HP EliteBook 840 G8',
-      serialNumber: 'LX-8894-HP15',
-      status: 'ACTIVE',
-      totalAmountTZS: 1800000,
-      paidAmountTZS: 1200000,
-      nextDueDateStr: '2026-11-01',
-      nextInstalmentTZS: 300000,
-      ownershipNote:
-        'This laptop is financed under a Hire Purchase agreement. Title will transfer to you upon full payment completion and verification.'
-    },
-    {
-      id: 'a2',
-      type: 'RENTAL',
-      agreementNumber: 'RT-2025-000088',
-      device: 'Lenovo ThinkPad T14',
-      serialNumber: 'LX-4412-THINK',
-      status: 'ACTIVE',
-      totalAmountTZS: 450000,
-      paidAmountTZS: 150000,
-      nextDueDateStr: '2026-11-15',
-      nextInstalmentTZS: 150000,
-      ownershipNote:
-        'This laptop is rented. Ownership always remains with the lessor. The device must be returned at the end of your rental period.'
-    }
-  ]);
+  // Authenticate session & load real customer data from backend
+  const loadPortalData = async () => {
+    setLoading(true);
+    setLoadError(null);
 
-  const [payments, setPayments] = useState<PaymentRecord[]>([
-    { reference: 'HP-1730291001-842', amountTZS: 300000, date: '2026-10-30', status: 'SUCCESS' },
-    { reference: 'HP-1730278912-119', amountTZS: 300000, date: '2026-10-01', status: 'SUCCESS' },
-    { reference: 'HP-1730205112-334', amountTZS: 300000, date: '2026-09-01', status: 'SUCCESS' },
-    { reference: 'HP-1730172410-091', amountTZS: 300000, date: '2026-08-01', status: 'SUCCESS' }
-  ]);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('hatlock_customer_token') : null;
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+
+    try {
+      const data = await customerApi.getPortalData();
+      setCustomer(data.customer);
+      setAgreements(data.agreements || []);
+      setPayments(data.payments || []);
+      if (data.customer?.phone) {
+        setPhoneNumber(data.customer.phone);
+      }
+    } catch (err: any) {
+      if (err.message && err.message.includes('expired')) {
+        router.replace('/login?expired=1');
+      } else {
+        setLoadError(err.message || 'Failed to load customer agreements. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPortalData();
+  }, []);
 
   const handleMakePayment = async () => {
     if (!paymentModal || paying) return;
@@ -116,329 +107,354 @@ export default function CustomerDashboard() {
         provider: selectedGateway
       });
 
-      const backendRef = res.reference || res.payment?.transactionReference || `HP-${Date.now()}`;
+      const backendRef = res.reference || res.payment?.transactionReference || 'PENDING';
       const backendStatus = res.payment?.status || (res.status === 'INITIATED' ? 'PENDING' : 'PENDING');
 
       if (backendStatus === 'COMPLETED') {
         // Confirmed settlement
-        setPayments(prev => [
-          {
-            reference: backendRef,
-            amountTZS: amountNum,
-            date: new Date().toISOString().split('T')[0],
-            status: 'SUCCESS'
-          },
-          ...prev.filter(p => p.reference !== backendRef)
-        ]);
-
-        setAgreements(prev =>
-          prev.map(a =>
-            a.id === paymentModal.id
-              ? { ...a, paidAmountTZS: Math.min(a.totalAmountTZS, a.paidAmountTZS + amountNum) }
-              : a
-          )
-        );
-
         setPaymentSuccess(
-          `Payment of TZS ${amountNum.toLocaleString()} confirmed successfully via ${selectedGateway}. Reference: ${backendRef}. Immediate hardware access policy active.`
+          `Payment of TZS ${amountNum.toLocaleString()} confirmed successfully via ${selectedGateway}. Reference: ${backendRef}.`
         );
         setPaymentModal(null);
+        await loadPortalData();
         setTimeout(() => setPaymentSuccess(null), 8000);
       } else {
-        // Standard pending prompt sent to customer mobile
-        setPayments(prev => [
-          {
-            reference: backendRef,
-            amountTZS: amountNum,
-            date: new Date().toISOString().split('T')[0],
-            status: 'PENDING'
-          },
-          ...prev.filter(p => p.reference !== backendRef)
-        ]);
-
+        // Standard USSD prompt sent to customer handset
         setPaymentPendingNotice(
-          `Payment request initiated! Please check your mobile phone (${cleanPhone}) for the prompt and enter your M-Pesa / Tigo PIN to authorize payment. Reference: ${backendRef}.`
+          `Payment prompt sent to ${cleanPhone}. Please authorize with your M-Pesa / Tigo PIN on your phone. Reference: ${backendRef}.`
         );
         setPaymentModal(null);
-        setTimeout(() => setPaymentPendingNotice(null), 12000);
+        await loadPortalData();
+        setTimeout(() => setPaymentPendingNotice(null), 10000);
       }
     } catch (err: any) {
-      setPaymentError(
-        err.message || 'Payment initiation failed. Please verify your phone number and network, then try again.'
-      );
+      setPaymentError(err.message || 'Payment initiation failed. Please check your phone number and try again.');
     } finally {
       setPaying(false);
     }
   };
 
-  const handleDownloadReceipt = (reference: string, amount: number) => {
-    const receiptContent = `===================================================
-HATLOCK DIGITAL PAYMENT RECEIPT
-Luxeenet Device Financing & Rental Platform
-===================================================
-Receipt Ref   : ${reference}
-Date & Time   : ${new Date().toLocaleString()}
-Amount Paid   : TZS ${amount.toLocaleString()}
-Payment Method: HatPesa Mobile Money (M-Pesa / Tigo)
-Status        : RECONCILED & HARDWARE UNLOCKED
-Customer Phone: ${phoneNumber}
-===================================================
-Hardware Authorization Policy: ACTIVE
-Cryptographic Signature: HMAC-SHA256 VERIFIED
-===================================================`;
-
+  const handleDownloadReceipt = (ref: string, amount: number) => {
+    const receiptContent = `HATLOCK PAYMENT RECEIPT\n---------------------------------\nTransaction Reference: ${ref}\nCustomer: ${customer ? `${customer.firstName} ${customer.lastName}` : 'Verified Customer'}\nPhone: ${customer?.phone || 'N/A'}\nAmount Paid: TZS ${amount.toLocaleString()}\nStatus: VERIFIED & RECONCILED\nDate: ${new Date().toISOString()}\nSecured by HatLock Cryptographic Device Security\n`;
     const blob = new Blob([receiptContent], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `HatLock_Receipt_${reference}.txt`;
-    document.body.appendChild(a);
+    a.download = `receipt-${ref}.txt`;
     a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    URL.revokeObjectURL(url);
   };
 
   const handleExportCSV = () => {
-    let csv = 'Reference,Date,Amount_TZS,Status\n';
-    payments.forEach(p => {
-      csv += `"${p.reference}","${p.date}",${p.amountTZS},"${p.status}"\n`;
-    });
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
+    const headers = 'Reference,Date,Amount_TZS,Status,Provider\n';
+    const rows = payments.map(p => `"${p.reference}","${p.date}",${p.amountTZS},"${p.status}","${p.provider}"`).join('\n');
+    const blob = new Blob([headers + rows], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `HatLock_Payment_History_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
+    a.download = `hatlock-payments-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    URL.revokeObjectURL(url);
   };
 
-  return (
-    <div className="space-y-8 max-w-5xl mx-auto py-4">
-      {/* Welcome Header */}
-      <div className="glass rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-800">
-        <div>
-          <div className="text-xs text-emerald-400 font-semibold uppercase tracking-wider mb-1">
-            Customer Self-Service Portal
-          </div>
-          <h1 className="text-2xl font-bold text-white">Welcome back, Amina</h1>
-          <p className="text-slate-400 text-sm mt-0.5">
-            Manage your agreements, track payments, and download receipts.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 text-xs">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            Device Access: Authorized (Unlocked)
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-xs tracking-wide uppercase font-semibold text-slate-500">Loading your agreements & verified status...</p>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 px-4">
+        <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl max-w-md w-full text-center shadow-xl">
+          <ShieldAlert className="w-12 h-12 text-rose-400 mx-auto mb-4" />
+          <h2 className="text-lg font-bold text-white mb-2">Unable to Load Portal</h2>
+          <p className="text-xs text-slate-400 mb-6">{loadError}</p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={loadPortalData}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-bold flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Retry
+            </button>
+            <button
+              onClick={() => customerApi.logout()}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold"
+            >
+              Sign Out
+            </button>
           </div>
         </div>
       </div>
+    );
+  }
 
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 max-w-6xl mx-auto font-sans">
+      {/* Header */}
+      <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-6 border-b border-slate-800">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                HatLock Borrower Portal
+              </h1>
+              <p className="text-xs text-slate-400">
+                {customer?.businessName ? `Financed via ${customer.businessName}` : 'Secure Device Lease & Payment Management'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {customer && (
+            <div className="text-right hidden sm:block">
+              <div className="text-xs font-bold text-white flex items-center gap-1.5 justify-end">
+                <User className="w-3.5 h-3.5 text-emerald-400" />
+                {customer.firstName} {customer.lastName}
+              </div>
+              <div className="text-[11px] text-slate-400 font-mono">{customer.phone}</div>
+            </div>
+          )}
+
+          <button
+            onClick={() => customerApi.logout()}
+            className="px-3.5 py-1.5 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Sign Out
+          </button>
+        </div>
+      </header>
+
+      {/* Global Alerts */}
       {paymentSuccess && (
-        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-sm flex items-start gap-2">
-          <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5 text-emerald-400" />
+        <div className="my-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-3 shadow-lg shadow-emerald-500/5">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
           <span>{paymentSuccess}</span>
         </div>
       )}
 
       {paymentPendingNotice && (
-        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-sm flex items-start gap-2">
-          <Clock className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-400" />
+        <div className="my-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-3 shadow-lg shadow-amber-500/5">
+          <Clock className="w-5 h-5 text-amber-400 shrink-0 animate-pulse" />
           <span>{paymentPendingNotice}</span>
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl bg-slate-900/80 border border-slate-800 w-fit">
-        {[
-          { key: 'agreements', label: 'My Agreements', icon: FileText },
-          { key: 'payments', label: 'Payment History', icon: CreditCard }
-        ].map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key as any)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === key
-                ? 'bg-slate-800 text-white font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            {label}
-          </button>
-        ))}
+      {/* Navigation Tabs */}
+      <div className="flex border-b border-slate-800 my-6">
+        <button
+          onClick={() => setActiveTab('agreements')}
+          className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'agreements'
+              ? 'border-emerald-400 text-emerald-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Laptop className="w-4 h-4" />
+          Active Hardware Agreements ({agreements.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('payments')}
+          className={`pb-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'payments'
+              ? 'border-emerald-400 text-emerald-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          Payment Transactions ({payments.length})
+        </button>
       </div>
 
       {/* Agreements Tab */}
       {activeTab === 'agreements' && (
-        <div className="space-y-5">
-          {agreements.map(agr => {
-            const progress = Math.min(100, Math.round((agr.paidAmountTZS / agr.totalAmountTZS) * 100));
-            return (
-              <div key={agr.id} className="glass rounded-2xl p-6 space-y-4 border border-slate-800">
-                {/* Agreement Header */}
-                <div className="flex flex-wrap items-center gap-3">
-                  {agr.type === 'HIRE_PURCHASE' ? (
-                    <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                      <FileText className="w-5 h-5" />
+        <div className="space-y-6">
+          {agreements.length === 0 ? (
+            <div className="glass rounded-2xl p-12 text-center border border-slate-800">
+              <Laptop className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+              <h3 className="text-base font-bold text-white mb-1">No Active Agreements Found</h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                There are currently no active device financing or rental contracts associated with this verified phone number.
+              </p>
+            </div>
+          ) : (
+            agreements.map((agr) => {
+              const progressPct = agr.totalAmountTZS > 0
+                ? Math.min(100, Math.round((agr.paidAmountTZS / agr.totalAmountTZS) * 100))
+                : 100;
+
+              return (
+                <div
+                  key={agr.id}
+                  className="bg-slate-900/60 backdrop-blur-md rounded-2xl p-6 border border-slate-800 shadow-xl relative overflow-hidden"
+                >
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          {agr.type === 'HIRE_PURCHASE' ? 'Hire Purchase' : 'Rental Lease'}
+                        </span>
+                        <span className="font-mono text-xs text-slate-400">
+                          {agr.agreementNumber}
+                        </span>
+                      </div>
+                      <h2 className="text-lg font-bold text-white mt-1">
+                        {agr.device}
+                      </h2>
+                      <div className="text-xs text-slate-400 font-mono mt-0.5">
+                        Serial Number: <span className="text-slate-300">{agr.serialNumber}</span>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="w-9 h-9 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
-                      <Repeat className="w-5 h-5" />
+
+                    <div className="flex items-center gap-3">
+                      {agr.isLocked ? (
+                        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold">
+                          <Lock className="w-3.5 h-3.5" />
+                          Device Restricted (Non-Payment)
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Hardware Unlocked & Active
+                        </div>
+                      )}
                     </div>
-                  )}
-                  <div>
-                    <div className="font-mono font-bold text-white text-sm">
-                      {agr.agreementNumber}
+                  </div>
+
+                  {/* Financial Overview */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 my-2">
+                    <div>
+                      <div className="text-[11px] text-slate-400 font-medium">Total Agreement Value</div>
+                      <div className="text-sm font-bold text-white font-mono mt-0.5">
+                        TZS {agr.totalAmountTZS.toLocaleString()}
+                      </div>
                     </div>
-                    <div className="text-xs text-slate-400">
-                      {agr.type === 'HIRE_PURCHASE' ? 'Hire Purchase — Ownership conditional on full payment' : 'Equipment Rental — Business retains ownership'}
+
+                    <div>
+                      <div className="text-[11px] text-slate-400 font-medium">Total Paid to Date</div>
+                      <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">
+                        TZS {agr.paidAmountTZS.toLocaleString()}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-[11px] text-slate-400 font-medium">Next Instalment Due</div>
+                      <div className="text-sm font-bold text-cyan-400 font-mono mt-0.5">
+                        TZS {agr.nextInstalmentTZS > 0 ? agr.nextInstalmentTZS.toLocaleString() : 'Settled'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-[11px] text-slate-400 font-medium">Payment Due Date</div>
+                      <div className="text-sm font-bold text-white font-mono mt-0.5">
+                        {agr.nextDueDateStr}
+                      </div>
                     </div>
                   </div>
-                  <div className="ml-auto">
-                    {agr.status === 'ACTIVE' && (
-                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        Active
-                      </span>
-                    )}
-                    {agr.status === 'GRACE_PERIOD' && (
-                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3" />
-                        Grace Period
-                      </span>
-                    )}
-                    {agr.status === 'RESTRICTED' && (
-                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1">
-                        <Lock className="w-3 h-3" />
-                        Device Locked
-                      </span>
-                    )}
-                  </div>
-                </div>
 
-                {/* Device Info */}
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800/80">
-                  <Laptop className="w-5 h-5 text-slate-400 flex-shrink-0" />
-                  <div>
-                    <div className="text-sm font-semibold text-white">{agr.device}</div>
-                    <div className="text-xs font-mono text-slate-400">S/N: {agr.serialNumber}</div>
-                  </div>
-                </div>
-
-                {/* Ownership Notice */}
-                <div className={`p-3 rounded-xl text-xs leading-relaxed ${
-                  agr.type === 'HIRE_PURCHASE'
-                    ? 'bg-indigo-950/40 border border-indigo-500/20 text-indigo-200'
-                    : 'bg-purple-950/40 border border-purple-500/20 text-purple-200'
-                }`}>
-                  <strong className="font-semibold text-white">Ownership Notice: </strong>
-                  {agr.ownershipNote}
-                </div>
-
-                {/* Progress */}
-                <div>
-                  <div className="flex justify-between text-xs text-slate-400 mb-2">
-                    <span>Payment progress</span>
-                    <span className="font-mono text-slate-200 font-semibold">{progress}% paid</span>
-                  </div>
-                  <div className="w-full h-2.5 rounded-full bg-slate-800 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${agr.type === 'HIRE_PURCHASE' ? 'bg-indigo-500' : 'bg-purple-500'}`}
-                      style={{ width: `${progress}%` }}
-                    ></div>
-                  </div>
-                  <div className="flex justify-between text-xs mt-2 text-slate-400">
-                    <span>Paid: TZS {agr.paidAmountTZS.toLocaleString()}</span>
-                    <span>Remaining: TZS {(agr.totalAmountTZS - agr.paidAmountTZS).toLocaleString()}</span>
-                  </div>
-                </div>
-
-                {/* Next Payment + CTA */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-800/60">
-                  <div className="flex items-center gap-3 text-sm">
-                    <Clock className="w-4 h-4 text-slate-400" />
-                    <span className="text-slate-300">
-                      Next instalment of{' '}
-                      <span className="text-white font-bold font-mono">
-                        TZS {agr.nextInstalmentTZS.toLocaleString()}
-                      </span>{' '}
-                      due {agr.nextDueDateStr}
-                    </span>
+                  {/* Progress Bar */}
+                  <div className="space-y-1.5 mb-4">
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>Repayment Progress</span>
+                      <span className="font-mono text-slate-300">{progressPct}% complete</span>
+                    </div>
+                    <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+                      <div
+                        className="bg-emerald-500 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${progressPct}%` }}
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleDownloadReceipt(agr.agreementNumber, agr.paidAmountTZS)}
-                      className="px-3 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition-colors"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      Receipt Statement
-                    </button>
+                  {/* Legal Note & Pay Action */}
+                  <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <p className="text-slate-400 text-[11px] max-w-lg leading-relaxed">
+                      {agr.ownershipNote}
+                    </p>
+
                     <button
                       onClick={() => {
                         setPaymentModal(agr);
-                        setPaymentAmount(String(agr.nextInstalmentTZS));
+                        setPaymentAmount(agr.nextInstalmentTZS > 0 ? String(agr.nextInstalmentTZS) : String(agr.outstandingBalanceTZS || 100000));
+                        setPaymentError(null);
                       }}
-                      className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-navy-900 font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+                      className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 transition-all active:scale-95 shrink-0 cursor-pointer"
                     >
                       <Smartphone className="w-3.5 h-3.5" />
-                      Pay via HatPesa
+                      Make Instalment Payment
                     </button>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       )}
 
       {/* Payments Tab */}
       {activeTab === 'payments' && (
-        <div className="glass rounded-2xl overflow-hidden border border-slate-800">
+        <div className="bg-slate-900/60 backdrop-blur-md rounded-2xl overflow-hidden border border-slate-800 shadow-xl">
           <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-white">Payment History</h2>
-            <button
-              onClick={handleExportCSV}
-              className="text-xs text-emerald-400 hover:underline flex items-center gap-1 font-medium"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Export CSV
-            </button>
+            <h2 className="text-sm font-bold text-white">Verified Payment History</h2>
+            {payments.length > 0 && (
+              <button
+                onClick={handleExportCSV}
+                className="text-xs text-emerald-400 hover:underline flex items-center gap-1 font-medium cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Export CSV
+              </button>
+            )}
           </div>
-          <div className="divide-y divide-slate-800/60">
-            {payments.map(p => (
-              <div key={p.reference} className="p-4 flex items-center justify-between hover:bg-slate-800/30 transition-colors">
-                <div>
-                  <div className="font-mono text-xs text-cyan-400 font-semibold">{p.reference}</div>
-                  <div className="text-xs text-slate-400 mt-0.5">{p.date}</div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="font-mono font-bold text-white text-sm">
-                    TZS {p.amountTZS.toLocaleString()}
-                  </span>
-                  {p.status === 'SUCCESS' ? (
-                    <span className="flex items-center gap-1 text-emerald-400 text-xs font-semibold">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Verified
+
+          {payments.length === 0 ? (
+            <div className="p-12 text-center text-slate-500 text-xs">
+              No recorded payment transactions found for this account.
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-800/60">
+              {payments.map((p) => (
+                <div key={p.reference} className="p-4 flex items-center justify-between hover:bg-slate-800/30 transition-colors">
+                  <div>
+                    <div className="font-mono text-xs text-cyan-400 font-semibold">{p.reference}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">{p.date} • {p.provider} ({p.paymentMethod})</div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="font-mono font-bold text-white text-sm">
+                      TZS {p.amountTZS.toLocaleString()}
                     </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-amber-400 text-xs font-semibold">
-                      <Clock className="w-4 h-4" />
-                      Pending
-                    </span>
-                  )}
-                  <button
-                    onClick={() => handleDownloadReceipt(p.reference, p.amountTZS)}
-                    className="p-1 text-slate-400 hover:text-white"
-                    title="Download receipt"
-                  >
-                    <Download className="w-4 h-4" />
-                  </button>
+                    {p.status === 'SUCCESS' ? (
+                      <span className="flex items-center gap-1 text-emerald-400 text-xs font-semibold">
+                        <CheckCircle2 className="w-4 h-4" />
+                        Verified
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-amber-400 text-xs font-semibold">
+                        <Clock className="w-4 h-4" />
+                        Pending
+                      </span>
+                    )}
+                    <button
+                      onClick={() => handleDownloadReceipt(p.reference, p.amountTZS)}
+                      className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                      title="Download receipt"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -456,7 +472,7 @@ Cryptographic Signature: HMAC-SHA256 VERIFIED
                   setPaymentModal(null);
                   setPaymentError(null);
                 }}
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -476,7 +492,7 @@ Cryptographic Signature: HMAC-SHA256 VERIFIED
                   <button
                     type="button"
                     onClick={() => setSelectedGateway('HATPESA')}
-                    className={`py-2 rounded-xl text-xs font-semibold border transition-colors ${
+                    className={`py-2 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
                       selectedGateway === 'HATPESA'
                         ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
                         : 'border-slate-800 text-slate-400'
@@ -487,7 +503,7 @@ Cryptographic Signature: HMAC-SHA256 VERIFIED
                   <button
                     type="button"
                     onClick={() => setSelectedGateway('SONICPESA')}
-                    className={`py-2 rounded-xl text-xs font-semibold border transition-colors ${
+                    className={`py-2 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
                       selectedGateway === 'SONICPESA'
                         ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300'
                         : 'border-slate-800 text-slate-400'
@@ -521,10 +537,10 @@ Cryptographic Signature: HMAC-SHA256 VERIFIED
               <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 text-xs text-slate-300 space-y-1">
                 <div className="font-semibold text-white flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  Instant Hardware Unlock
+                  Instant Hardware Unlock Policy
                 </div>
                 <div>
-                  Upon entering your M-Pesa PIN on your phone, HatPesa will instantly reconcile your account and dispatch an immediate signed unlock payload.
+                  Upon authorizing the prompt with your mobile PIN, verified settlement immediately updates your balance and dispatches an authentic unlock command.
                 </div>
               </div>
             </div>
@@ -532,16 +548,23 @@ Cryptographic Signature: HMAC-SHA256 VERIFIED
             <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-3">
               <button
                 onClick={() => setPaymentModal(null)}
-                className="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-sm"
+                className="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-sm cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 disabled={paying}
                 onClick={handleMakePayment}
-                className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-sm font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-sm font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50 cursor-pointer"
               >
-                {paying ? 'Processing...' : `Confirm & Pay via ${selectedGateway === 'HATPESA' ? 'HatPesa' : 'SonicPesa'}`}
+                {paying ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  `Confirm & Pay via ${selectedGateway === 'HATPESA' ? 'HatPesa' : 'SonicPesa'}`
+                )}
               </button>
             </div>
           </div>
