@@ -8,6 +8,7 @@ COPY package.json package-lock.json* ./
 COPY packages/database/package.json ./packages/database/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/hatpesa/package.json ./packages/hatpesa/
+COPY packages/sonicpesa/package.json ./packages/sonicpesa/
 COPY apps/api/package.json ./apps/api/
 
 # Install dependencies
@@ -22,6 +23,7 @@ COPY tsconfig.json ./
 RUN cd packages/database && npx prisma generate
 RUN cd packages/shared && npm run build --if-present
 RUN cd packages/hatpesa && npm run build --if-present
+RUN cd packages/sonicpesa && npm run build --if-present
 RUN cd apps/api && npm run build
 
 # Production runner stage
@@ -40,6 +42,7 @@ COPY packages/database/package.json ./packages/database/
 COPY packages/database/prisma ./packages/database/prisma
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/hatpesa/package.json ./packages/hatpesa/
+COPY packages/sonicpesa/package.json ./packages/sonicpesa/
 COPY apps/api/package.json ./apps/api/
 
 RUN npm ci --omit=dev
@@ -47,6 +50,7 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/packages/database ./packages/database
 COPY --from=builder /app/packages/shared ./packages/shared
 COPY --from=builder /app/packages/hatpesa ./packages/hatpesa
+COPY --from=builder /app/packages/sonicpesa ./packages/sonicpesa
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 
 EXPOSE 3000

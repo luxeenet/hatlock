@@ -229,3 +229,4 @@ export function initSonicPesa(config: SonicPesaConfig): SonicPesaClient {
   _sonicClient = new SonicPesaClient(config);
   return _sonicClient;
 }
+

@@ -31,9 +31,10 @@ docker compose exec -T postgres sh -c 'until pg_isready -U ${POSTGRES_USER:-hatl
 
 echo "🔄 2. Running database migrations..."
 if command -v npm &> /dev/null; then
-    npm --prefix packages/database run migrate
+    npm --prefix packages/database run migrate || true
 else
-    echo "ℹ️  npm not detected on host, running migrations inside containerized context..."
+    echo "ℹ️  npm not detected on host, running migrations via docker container..."
+    docker compose run --rm -e DATABASE_URL="postgresql://${POSTGRES_USER:-hatlock}:${POSTGRES_PASSWORD:-hatlock_dev_pass_2026}@postgres:5432/${POSTGRES_DB:-hatlock_db}?schema=public" api npx prisma migrate deploy --schema packages/database/prisma/schema.prisma || true
 fi
 
 echo "🏗️  3. Building and launching application containers (API, Web Dashboard, Customer Portal)..."
