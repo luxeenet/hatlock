@@ -57,9 +57,13 @@ COPY --from=builder /app/packages/hatpesa ./packages/hatpesa
 COPY --from=builder /app/packages/sonicpesa ./packages/sonicpesa
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 
-# Generate Prisma client for production runner environment
+# Copy generated Prisma Client directly from builder stage
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+
+# Verify and ensure Prisma Client generation matches production runner environment
 RUN cd packages/database && npx prisma generate
 
 EXPOSE 3000
 
-CMD ["node", "apps/api/dist/server.js"]
+CMD ["node", "apps/api/dist/apps/api/src/server.js"]

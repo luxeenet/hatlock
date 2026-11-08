@@ -2,7 +2,7 @@ name: hatlock
 
 services:
   # -------------------------------------------------------------
-  # Database: PostgreSQL 16 with durable storage
+  # Database: PostgreSQL 16 with durable storage (internal only)
   # -------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
@@ -12,8 +12,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-hatlock}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hatlock_dev_pass_2026}
       POSTGRES_DB: ${POSTGRES_DB:-hatlock_db}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -23,14 +21,12 @@ services:
       retries: 5
 
   # -------------------------------------------------------------
-  # Cache & Queues: Redis 7
+  # Cache & Queues: Redis 7 (internal only)
   # -------------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: hatlock-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -67,7 +63,7 @@ services:
       SONICPESA_API_SECRET: ${SONICPESA_API_SECRET:-}
       SONICPESA_WEBHOOK_SECRET: ${SONICPESA_WEBHOOK_SECRET:-}
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
   # -------------------------------------------------------------
   # Business Admin Web Dashboard: Next.js 14
@@ -85,7 +81,7 @@ services:
       PORT: 3002
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
     ports:
-      - "3002:3002"
+      - "127.0.0.1:3002:3002"
 
   # -------------------------------------------------------------
   # Customer Self-Service Portal: Next.js 14
@@ -103,7 +99,7 @@ services:
       PORT: 3001
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
 
 volumes:
   postgres_data:

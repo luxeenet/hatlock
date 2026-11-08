@@ -108,7 +108,7 @@ Save and exit (`Ctrl + O`, `Enter`, `Ctrl + X`).
 
 ---
 
-## 4. Automated Deployment
+## 4. Automated Production Deployment
 
 Run the automated VPS deployment script:
 
@@ -118,14 +118,11 @@ chmod +x deploy-vps.sh
 ```
 
 ### What this script performs:
-1. Starts **PostgreSQL 16** with durable Docker volume storage (`hatlock_postgres_data`).
-2. Starts **Redis 7** with persistent snapshotting (`hatlock_redis_data`).
-3. Waits for PostgreSQL to pass internal health check probes.
-4. Deploys database migrations via Prisma.
-5. Builds and launches:
-   - `hatlock-api` (Backend Fastify API on port `3000`)
-   - `hatlock-web` (Admin Web Dashboard on port `3002`)
-   - `hatlock-customer-portal` (Customer Portal on port `3001`)
+1. **Container Compilation:** Builds the container images with pinned dependencies and pre-generates Prisma Client.
+2. **Database Provisioning:** Starts **PostgreSQL 16** with durable Docker volume storage (`hatlock_postgres_data`) and **Redis 7** (`hatlock_redis_data`), both isolated strictly to the internal Docker network.
+3. **Health Validation:** Probes PostgreSQL until ready to accept connections.
+4. **Safe Migrations:** Runs `prisma migrate deploy` directly against the database. If a migration encounters an error, the deployment immediately halts safely without continuing or masking the failure.
+5. **Service Launch:** Launches `hatlock-api` (Port 3000), `hatlock-web` (Port 3002), and `hatlock-customer-portal` (Port 3001), strictly bound to `127.0.0.1` so they are inaccessible from outside interfaces except through Nginx reverse proxy.
 
 Verify that all containers are healthy:
 ```bash
