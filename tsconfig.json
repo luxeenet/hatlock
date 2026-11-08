@@ -20,13 +20,16 @@
       "@hatlock/sonicpesa": ["./packages/sonicpesa/src/index.ts"]
     }
   },
-  "files": [],
+  "include": [
+    "packages/*/src/**/*",
+    "apps/api/src/**/*"
+  ],
   "exclude": [
     "node_modules",
     "dist",
     "**/node_modules",
     "agents",
-    "apps",
-    "packages"
+    "apps/web",
+    "apps/customer-portal"
   ]
 }
