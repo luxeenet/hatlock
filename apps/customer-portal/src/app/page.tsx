@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { customerApi, API_BASE } from '../lib/api';
 import {
   Laptop,
   CreditCard,
@@ -46,6 +47,8 @@ export default function CustomerDashboard() {
   const [phoneNumber, setPhoneNumber] = useState('+255 712 345 678');
   const [paymentAmount, setPaymentAmount] = useState('300000');
   const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null);
+  const [paymentPendingNotice, setPaymentPendingNotice] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
 
   const [agreements, setAgreements] = useState<Agreement[]>([
@@ -87,54 +90,82 @@ export default function CustomerDashboard() {
   ]);
 
   const handleMakePayment = async () => {
-    if (!paymentModal) return;
+    if (!paymentModal || paying) return;
+    setPaymentError(null);
+
+    const cleanPhone = phoneNumber.replace(/[^\d+]/g, '');
+    if (!cleanPhone || cleanPhone.replace(/\D/g, '').length < 9) {
+      setPaymentError('Please enter a valid phone number (at least 9 digits).');
+      return;
+    }
+
+    const amountNum = Number(paymentAmount);
+    if (!amountNum || isNaN(amountNum) || amountNum <= 0) {
+      setPaymentError('Please enter a valid positive payment amount.');
+      return;
+    }
+
     setPaying(true);
 
     try {
-      const amountNum = Number(paymentAmount) || paymentModal.nextInstalmentTZS;
-      const ref = `HP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const res = await customerApi.initiatePayment({
+        agreementType: paymentModal.type,
+        agreementId: paymentModal.id,
+        amount: amountNum,
+        phoneNumber: cleanPhone,
+        provider: selectedGateway
+      });
 
-      // Try calling backend API if available
-      try {
-        await fetch('http://localhost:3000/api/v1/payments/initiate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            agreementType: paymentModal.type,
-            agreementId: paymentModal.id,
-            amount: amountNum,
-            phoneNumber
-          })
-        });
-      } catch (e) {
-        console.warn('API background call initiated:', e);
+      const backendRef = res.reference || res.payment?.transactionReference || `HP-${Date.now()}`;
+      const backendStatus = res.payment?.status || (res.status === 'INITIATED' ? 'PENDING' : 'PENDING');
+
+      if (backendStatus === 'COMPLETED') {
+        // Confirmed settlement
+        setPayments(prev => [
+          {
+            reference: backendRef,
+            amountTZS: amountNum,
+            date: new Date().toISOString().split('T')[0],
+            status: 'SUCCESS'
+          },
+          ...prev.filter(p => p.reference !== backendRef)
+        ]);
+
+        setAgreements(prev =>
+          prev.map(a =>
+            a.id === paymentModal.id
+              ? { ...a, paidAmountTZS: Math.min(a.totalAmountTZS, a.paidAmountTZS + amountNum) }
+              : a
+          )
+        );
+
+        setPaymentSuccess(
+          `Payment of TZS ${amountNum.toLocaleString()} confirmed successfully via ${selectedGateway}. Reference: ${backendRef}. Immediate hardware access policy active.`
+        );
+        setPaymentModal(null);
+        setTimeout(() => setPaymentSuccess(null), 8000);
+      } else {
+        // Standard pending prompt sent to customer mobile
+        setPayments(prev => [
+          {
+            reference: backendRef,
+            amountTZS: amountNum,
+            date: new Date().toISOString().split('T')[0],
+            status: 'PENDING'
+          },
+          ...prev.filter(p => p.reference !== backendRef)
+        ]);
+
+        setPaymentPendingNotice(
+          `Payment request initiated! Please check your mobile phone (${cleanPhone}) for the prompt and enter your M-Pesa / Tigo PIN to authorize payment. Reference: ${backendRef}.`
+        );
+        setPaymentModal(null);
+        setTimeout(() => setPaymentPendingNotice(null), 12000);
       }
-
-      // Add to local journal
-      setPayments(prev => [
-        {
-          reference: ref,
-          amountTZS: amountNum,
-          date: new Date().toISOString().split('T')[0],
-          status: 'SUCCESS'
-        },
-        ...prev
-      ]);
-
-      // Update agreement paid balance
-      setAgreements(prev =>
-        prev.map(a =>
-          a.id === paymentModal.id
-            ? { ...a, paidAmountTZS: Math.min(a.totalAmountTZS, a.paidAmountTZS + amountNum) }
-            : a
-        )
+    } catch (err: any) {
+      setPaymentError(
+        err.message || 'Payment initiation failed. Please verify your phone number and network, then try again.'
       );
-
-      setPaymentSuccess(
-        `Payment request of TZS ${amountNum.toLocaleString()} completed successfully via HatPesa (${phoneNumber}). Ref: ${ref}. Immediate signed unlock command queued.`
-      );
-      setPaymentModal(null);
-      setTimeout(() => setPaymentSuccess(null), 8000);
     } finally {
       setPaying(false);
     }
@@ -206,8 +237,15 @@ Cryptographic Signature: HMAC-SHA256 VERIFIED
 
       {paymentSuccess && (
         <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-sm flex items-start gap-2">
-          <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5 text-emerald-400" />
           <span>{paymentSuccess}</span>
+        </div>
+      )}
+
+      {paymentPendingNotice && (
+        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-sm flex items-start gap-2">
+          <Clock className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-400" />
+          <span>{paymentPendingNotice}</span>
         </div>
       )}
 
@@ -414,12 +452,22 @@ Cryptographic Signature: HMAC-SHA256 VERIFIED
                 <h3 className="text-base font-bold text-white">Instant Mobile Money Repayment</h3>
               </div>
               <button
-                onClick={() => setPaymentModal(null)}
+                onClick={() => {
+                  setPaymentModal(null);
+                  setPaymentError(null);
+                }}
                 className="text-slate-400 hover:text-white p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {paymentError && (
+              <div className="mt-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+                <span>{paymentError}</span>
+              </div>
+            )}
 
             <div className="space-y-4 my-4">
               <div>

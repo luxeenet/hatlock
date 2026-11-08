@@ -20,6 +20,9 @@ COPY apps/web ./apps/web
 COPY tsconfig.json ./
 
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_API_URL=https://api.luxeenet.com
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 RUN cd packages/database && npx prisma generate
 RUN cd apps/web && npm run build
 
@@ -30,6 +33,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3002
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_API_URL=https://api.luxeenet.com
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 COPY package.json package-lock.json* ./
 COPY packages/database/package.json ./packages/database/

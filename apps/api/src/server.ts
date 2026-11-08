@@ -77,10 +77,41 @@ async function buildServer() {
   });
 
   // CORS
+  const corsOrigins = env.CORS_ORIGINS.split(',').map(s => s.trim()).filter(Boolean);
   await server.register(cors, {
-    origin: env.CORS_ORIGINS.split(','),
+    origin: corsOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+  });
+
+  // Health check endpoints (production probe)
+  server.get('/health', { schema: { tags: ['System'], summary: 'System health check' } }, async (request, reply) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      return reply.send({
+        status: 'ok',
+        version: env.APP_VERSION,
+        database: 'connected',
+        timestamp: new Date().toISOString()
+      });
+    } catch (err: any) {
+      server.log.error({ err }, 'Health check failed: database connectivity error');
+      return reply.status(503).send({
+        status: 'error',
+        version: env.APP_VERSION,
+        database: 'disconnected',
+        error: 'Database connection failed',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  server.get('/api/v1/health', { schema: { tags: ['System'], summary: 'API v1 health status' } }, async (request, reply) => {
+    return reply.send({
+      status: 'ok',
+      version: env.APP_VERSION,
+      timestamp: new Date().toISOString()
+    });
   });
 
   // Rate limiting (global)

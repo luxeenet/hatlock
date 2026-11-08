@@ -5,7 +5,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3001),
   APP_VERSION: z.string().default('1.0.0'),
-  API_BASE_URL: z.string().default('http://localhost:3000'),
+  API_BASE_URL: z.string().default('https://api.luxeenet.com'),
 
   // Database
   DATABASE_URL: z.string().min(1),
@@ -21,7 +21,7 @@ const envSchema = z.object({
   REFRESH_TOKEN_SECRET: z.string().min(32),
 
   // CORS
-  CORS_ORIGINS: z.string().default('http://localhost:3000,http://localhost:3002'),
+  CORS_ORIGINS: z.string().default('https://admin.luxeenet.com,https://portal.luxeenet.com,http://localhost:3000,http://localhost:3001,http://localhost:3002'),
 
   // Device command signing (ECDSA P-256)
   COMMAND_SIGNING_PRIVATE_KEY: z.string().min(1),

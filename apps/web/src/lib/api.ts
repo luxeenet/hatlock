@@ -1,7 +1,7 @@
 // HatLock API Client
 // Standardized client connecting Next.js frontend with Fastify backend
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === 'production' ? 'https://api.luxeenet.com' : 'http://localhost:3000');
 
 function getAuthHeader(): Record<string, string> {
   if (typeof window === 'undefined') return {};

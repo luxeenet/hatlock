@@ -37,21 +37,18 @@ const ProviderConfigSchema = z.object({
 });
 
 export async function paymentRoutes(server: FastifyInstance) {
-  server.addHook('preHandler', server.authenticate);
-
   // --------------------------------------------------------------------------
-  // 1. List Payment Transactions
+  // 1. List Payment Transactions (Protected - Business Staff)
   // --------------------------------------------------------------------------
   server.get('/', {
+    preHandler: [server.authenticate],
     schema: {
       tags: ['Payments'],
       summary: 'List payment transactions'
     }
-  }, async (request: FastifyRequest<{
-    Querystring: { customerId?: string; agreementId?: string; status?: string; provider?: string }
-  }>, reply: FastifyReply) => {
-    const businessId = (request as any).businessId;
-    const { customerId, status, provider } = request.query;
+  }, async (request: any, reply: FastifyReply) => {
+    const businessId = request.businessId;
+    const { customerId, status, provider } = request.query || {};
 
     const where: any = { businessId };
     if (customerId) where.customerId = customerId;
@@ -79,7 +76,14 @@ export async function paymentRoutes(server: FastifyInstance) {
       summary: 'Initiate payment through HatPesa or SonicPesa gateway'
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const businessId = (request as any).businessId;
+    let businessId = (request as any).businessId;
+    if (!businessId && request.headers.authorization) {
+      try {
+        const payload = await request.jwtVerify<any>();
+        businessId = payload.businessId;
+      } catch (_) {}
+    }
+
     const parse = InitiatePaymentSchema.safeParse(request.body);
     if (!parse.success) {
       return reply.status(400).send({ error: 'VALIDATION_ERROR', details: parse.error.flatten() });
@@ -94,11 +98,15 @@ export async function paymentRoutes(server: FastifyInstance) {
     let deviceId: string | null = null;
 
     if (agreementType === 'HIRE_PURCHASE') {
+      const where: any = { id: agreementId };
+      if (businessId) where.businessId = businessId;
+
       const hp = await prisma.financingAgreement.findFirst({
-        where: { id: agreementId, businessId },
+        where,
         include: { customer: true }
       });
-      if (!hp) return reply.status(404).send({ error: 'AGREEMENT_NOT_FOUND' });
+      if (!hp) return reply.status(404).send({ error: 'AGREEMENT_NOT_FOUND', message: 'Financing agreement not found' });
+      businessId = hp.businessId;
       customerId = hp.customerId;
       agreementNumber = hp.agreementNumber;
       deviceId = hp.deviceId;
@@ -107,11 +115,15 @@ export async function paymentRoutes(server: FastifyInstance) {
         customerName = `${hp.customer.firstName} ${hp.customer.lastName}`;
       }
     } else {
+      const where: any = { id: agreementId };
+      if (businessId) where.businessId = businessId;
+
       const rt = await prisma.rentalAgreement.findFirst({
-        where: { id: agreementId, businessId },
+        where,
         include: { customer: true }
       });
-      if (!rt) return reply.status(404).send({ error: 'AGREEMENT_NOT_FOUND' });
+      if (!rt) return reply.status(404).send({ error: 'AGREEMENT_NOT_FOUND', message: 'Rental agreement not found' });
+      businessId = rt.businessId;
       customerId = rt.customerId;
       agreementNumber = rt.agreementNumber;
       deviceId = rt.deviceId;
@@ -147,7 +159,6 @@ export async function paymentRoutes(server: FastifyInstance) {
     // ------------------------------------------------------------------------
     if (provider === 'SONICPESA') {
       try {
-        // Check for custom business SonicPesa configuration, otherwise fallback to env
         const dbConfig = await prisma.paymentProviderConfig.findUnique({
           where: { businessId_provider: { businessId, provider: 'SONICPESA' } }
         });
@@ -174,7 +185,7 @@ export async function paymentRoutes(server: FastifyInstance) {
           }
         });
 
-        // Save order_id against the payment record
+        // Save order_id against the payment record (still PENDING until customer enters PIN on mobile phone)
         const updatedPayment = await prisma.paymentTransaction.update({
           where: { id: payment.id },
           data: {
@@ -192,29 +203,24 @@ export async function paymentRoutes(server: FastifyInstance) {
           gateway: orderRes
         });
       } catch (err: any) {
-        server.log.warn({ err: err.message }, 'SonicPesa API call fallback/simulation check');
-        if (env.NODE_ENV !== 'production' || env.SONICPESA_TEST_MODE) {
-          const completedPayment = await prisma.paymentTransaction.update({
-            where: { id: payment.id },
-            data: { status: TransactionStatus.COMPLETED, providerReference: `sp_mock_${Date.now()}` }
-          });
-          return reply.send({
-            status: 'INITIATED',
-            provider: 'SONICPESA',
-            reference,
-            payment: completedPayment,
-            simulated: true
-          });
-        }
+        server.log.error({ err: err.message, reference }, 'SonicPesa API call failed');
+        await prisma.paymentTransaction.update({
+          where: { id: payment.id },
+          data: {
+            status: TransactionStatus.FAILED,
+            failReason: err.message || 'SonicPesa provider communication failed'
+          }
+        });
         return reply.status(502).send({
           error: 'GATEWAY_ERROR',
-          message: err.message || 'SonicPesa provider communication failed'
+          message: err.message || 'SonicPesa provider communication failed',
+          reference
         });
       }
     }
 
     // ------------------------------------------------------------------------
-    // Case B: HatPesa Integration (Preserved)
+    // Case B: HatPesa Integration
     // ------------------------------------------------------------------------
     try {
       const hatpesa = initHatPesa({
@@ -242,40 +248,109 @@ export async function paymentRoutes(server: FastifyInstance) {
       return reply.send({
         status: 'INITIATED',
         provider: 'HATPESA',
+        reference,
         payment,
         gateway: gatewayResponse
       });
     } catch (err: any) {
-      server.log.warn({ err: err.message }, 'HatPesa external gateway unreachable, completing in local dev simulation mode');
-      if (env.NODE_ENV !== 'production' || env.HATPESA_TEST_MODE) {
-        const completedPayment = await prisma.paymentTransaction.update({
-          where: { id: payment.id },
-          data: { status: TransactionStatus.COMPLETED }
-        });
-        return reply.send({
-          status: 'INITIATED',
-          provider: 'HATPESA',
-          reference,
-          payment: completedPayment,
-          simulated: true
-        });
-      }
+      server.log.error({ err: err.message, reference }, 'HatPesa API call failed');
+      await prisma.paymentTransaction.update({
+        where: { id: payment.id },
+        data: {
+          status: TransactionStatus.FAILED,
+          failReason: err.message || 'HatPesa provider communication failed'
+        }
+      });
       return reply.status(502).send({
         error: 'GATEWAY_ERROR',
-        message: err.message || 'Payment provider communication failed'
+        message: err.message || 'Payment provider communication failed',
+        reference
       });
     }
   });
 
   // --------------------------------------------------------------------------
-  // 3. SonicPesa: Check Payment Order Status (9.2)
+  // 3. Public Payment Status Check (Customer Portal & Webhooks)
+  // --------------------------------------------------------------------------
+  server.get('/status/:reference', {
+    schema: {
+      tags: ['Payments'],
+      summary: 'Get public transaction status by payment reference'
+    }
+  }, async (request: any, reply: FastifyReply) => {
+    const { reference } = request.params || {};
+    const payment = await prisma.paymentTransaction.findFirst({
+      where: {
+        OR: [
+          { transactionReference: reference },
+          { id: reference },
+          { providerReference: reference },
+          { idempotencyKey: reference }
+        ]
+      },
+      select: {
+        id: true,
+        transactionReference: true,
+        status: true,
+        amountTZS: true,
+        currency: true,
+        paymentProvider: true,
+        paymentMethod: true,
+        createdAt: true,
+        failReason: true
+      }
+    });
+
+    if (!payment) {
+      return reply.status(404).send({ error: 'TRANSACTION_NOT_FOUND', message: 'Transaction reference not found' });
+    }
+
+    return reply.send({ payment });
+  });
+
+  // --------------------------------------------------------------------------
+  // 4. Payment History for Agreement (Customer Portal)
+  // --------------------------------------------------------------------------
+  server.get('/history/:agreementId', {
+    schema: {
+      tags: ['Payments'],
+      summary: 'Get payment history for agreement'
+    }
+  }, async (request: any, reply: FastifyReply) => {
+    const { agreementId } = request.params || {};
+    const payments = await prisma.paymentTransaction.findMany({
+      where: {
+        OR: [
+          { financingAgreementId: agreementId },
+          { rentalAgreementId: agreementId }
+        ]
+      },
+      select: {
+        id: true,
+        transactionReference: true,
+        status: true,
+        amountTZS: true,
+        currency: true,
+        paymentProvider: true,
+        paymentMethod: true,
+        createdAt: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return reply.send({ payments });
+  });
+
+  // --------------------------------------------------------------------------
+  // 5. SonicPesa: Check Payment Order Status (9.2) - Protected
   // --------------------------------------------------------------------------
   server.post('/sonicpesa/order-status', {
+    preHandler: [server.authenticate],
     schema: {
       tags: ['Payments'],
       summary: 'Query live SonicPesa order status'
     }
-  }, async (request: FastifyRequest<{ Body: { order_id: string } }>, reply: FastifyReply) => {
+  }, async (request: any, reply: FastifyReply) => {
     const { order_id } = request.body || {};
     if (!order_id) {
       return reply.status(400).send({ error: 'order_id is required' });
@@ -298,14 +373,15 @@ export async function paymentRoutes(server: FastifyInstance) {
   });
 
   // --------------------------------------------------------------------------
-  // 4. SonicPesa: Read Transaction by ID (9.4)
+  // 6. SonicPesa: Read Transaction by ID (9.4) - Protected
   // --------------------------------------------------------------------------
   server.post('/sonicpesa/transaction', {
+    preHandler: [server.authenticate],
     schema: {
       tags: ['Payments'],
       summary: 'Read transaction details by ID from SonicPesa'
     }
-  }, async (request: FastifyRequest<{ Body: { id: string } }>, reply: FastifyReply) => {
+  }, async (request: any, reply: FastifyReply) => {
     const { id } = request.body || {};
     if (!id) {
       return reply.status(400).send({ error: 'id is required' });
@@ -328,9 +404,10 @@ export async function paymentRoutes(server: FastifyInstance) {
   });
 
   // --------------------------------------------------------------------------
-  // 5. SonicPesa: Authorized Payouts (9.5)
+  // 7. SonicPesa: Authorized Payouts (9.5) - Protected
   // --------------------------------------------------------------------------
   server.post('/payouts/create', {
+    preHandler: [server.authenticate],
     schema: {
       tags: ['Payments'],
       summary: 'Create authorized payout with approval controls and PIN verification'
@@ -426,9 +503,10 @@ export async function paymentRoutes(server: FastifyInstance) {
   });
 
   // --------------------------------------------------------------------------
-  // 6. Payment Provider Management (9.6)
+  // 8. Payment Provider Management (9.6) - Protected
   // --------------------------------------------------------------------------
   server.get('/providers', {
+    preHandler: [server.authenticate],
     schema: {
       tags: ['Payments'],
       summary: 'Get configuration and connectivity status for payment providers'
@@ -474,13 +552,14 @@ export async function paymentRoutes(server: FastifyInstance) {
 
   // Configure provider credentials
   server.post('/providers/:provider/configure', {
+    preHandler: [server.authenticate],
     schema: {
       tags: ['Payments'],
       summary: 'Configure provider API credentials and status'
     }
-  }, async (request: FastifyRequest<{ Params: { provider: string } }>, reply: FastifyReply) => {
-    const businessId = (request as any).businessId;
-    const provider = request.params.provider.toUpperCase();
+  }, async (request: any, reply: FastifyReply) => {
+    const businessId = request.businessId;
+    const provider = String(request.params?.provider || '').toUpperCase();
 
     if (provider !== 'HATPESA' && provider !== 'SONICPESA') {
       return reply.status(400).send({ error: 'INVALID_PROVIDER', message: 'Supported: HATPESA, SONICPESA' });
@@ -523,13 +602,14 @@ export async function paymentRoutes(server: FastifyInstance) {
 
   // Test provider connectivity
   server.post('/providers/:provider/test', {
+    preHandler: [server.authenticate],
     schema: {
       tags: ['Payments'],
       summary: 'Test provider API connectivity'
     }
-  }, async (request: FastifyRequest<{ Params: { provider: string } }>, reply: FastifyReply) => {
-    const businessId = (request as any).businessId;
-    const provider = request.params.provider.toUpperCase();
+  }, async (request: any, reply: FastifyReply) => {
+    const businessId = request.businessId;
+    const provider = String(request.params?.provider || '').toUpperCase();
 
     const config = await prisma.paymentProviderConfig.findUnique({
       where: { businessId_provider: { businessId, provider } }

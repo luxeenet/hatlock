@@ -49,21 +49,23 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       PORT: 3000
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-hatlock}:${POSTGRES_PASSWORD:-hatlock_dev_pass_2026}@postgres:5432/${POSTGRES_DB:-hatlock_db}?schema=public
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key-hatlock-luxeenet-2026-xyz}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-super-secret-refresh-key-hatlock-luxeenet-2026-abc}
-      HATPESA_API_KEY: ${HATPESA_API_KEY:-hp_test_key_luxeenet}
-      HATPESA_API_SECRET: ${HATPESA_API_SECRET:-hp_test_secret_luxeenet}
-      HATPESA_WEBHOOK_SECRET: ${HATPESA_WEBHOOK_SECRET:-hp_test_webhook_secret_luxeenet}
-      SONICPESA_API_KEY: ${SONICPESA_API_KEY:-}
-      SONICPESA_API_SECRET: ${SONICPESA_API_SECRET:-}
-      SONICPESA_WEBHOOK_SECRET: ${SONICPESA_WEBHOOK_SECRET:-}
+      API_BASE_URL: ${API_BASE_URL:-https://api.luxeenet.com}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://admin.luxeenet.com,https://portal.luxeenet.com}
     ports:
       - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   # -------------------------------------------------------------
   # Business Admin Web Dashboard: Next.js 14
@@ -72,6 +74,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.luxeenet.com}
     container_name: hatlock-web
     restart: unless-stopped
     depends_on:
@@ -79,7 +83,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3002
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.luxeenet.com}
     ports:
       - "127.0.0.1:3002:3002"
 
@@ -90,6 +94,8 @@ services:
     build:
       context: .
       dockerfile: apps/customer-portal/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.luxeenet.com}
     container_name: hatlock-customer-portal
     restart: unless-stopped
     depends_on:
@@ -97,7 +103,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.luxeenet.com}
     ports:
       - "127.0.0.1:3001:3001"
 
