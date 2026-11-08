@@ -10,6 +10,7 @@ import { AgreementType, TransactionStatus, VerificationStatus } from '@prisma/cl
 import { logger } from '../lib/logger.js';
 import { auditLog } from '../services/audit.js';
 import { AuditAction } from '@prisma/client';
+import { transitionPaymentTransaction } from '../services/payment-state-machine.js';
 
 const hatpesa = initHatPesa({
   baseUrl: env.HATPESA_BASE_URL,
@@ -104,28 +105,21 @@ export async function hatpesaWebhookRoutes(server: FastifyInstance) {
     }
 
     if (verified.status !== 'completed') {
-      await prisma.paymentTransaction.update({
-        where: { id: transaction.id },
-        data: {
-          status: paymentStatus === 'failed' ? TransactionStatus.FAILED : TransactionStatus.PENDING,
-          verificationStatus: VerificationStatus.FAILED,
-          providerReference: providerReference ?? verified.providerReference,
-          webhookReceivedAt: new Date()
-        }
+      const targetStatus = paymentStatus === 'failed' ? TransactionStatus.FAILED : TransactionStatus.PENDING;
+      await transitionPaymentTransaction(prisma, transaction.id, targetStatus, {
+        verificationStatus: VerificationStatus.FAILED,
+        providerReference: providerReference ?? verified.providerReference,
+        webhookReceivedAt: new Date()
       });
       return reply.status(200).send({ received: true });
     }
 
     // 6. Mark transaction as verified and completed
-    await prisma.paymentTransaction.update({
-      where: { id: transaction.id },
-      data: {
-        status: TransactionStatus.COMPLETED,
-        verificationStatus: VerificationStatus.VERIFIED,
-        providerReference: verified.providerReference ?? providerReference,
-        webhookReceivedAt: new Date(),
-        verifiedAt: new Date()
-      }
+    await transitionPaymentTransaction(prisma, transaction.id, TransactionStatus.COMPLETED, {
+      verificationStatus: VerificationStatus.VERIFIED,
+      providerReference: verified.providerReference ?? providerReference,
+      webhookReceivedAt: new Date(),
+      verifiedAt: new Date()
     });
 
     // 7. Apply payment to agreement

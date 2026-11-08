@@ -9,6 +9,8 @@ import { initSonicPesa, SonicPesaClient } from '@hatlock/sonicpesa';
 import { env } from '../lib/env.js';
 import { AgreementType, TransactionStatus, VerificationStatus, AuditAction } from '@prisma/client';
 import { auditLog } from '../services/audit.js';
+import { phoneNumbersMatch } from '../lib/phone.js';
+import { transitionPaymentTransaction, assertValidPaymentTransition } from '../services/payment-state-machine.js';
 
 const InitiatePaymentSchema = z.object({
   agreementType: z.enum(['HIRE_PURCHASE', 'RENTAL']),
@@ -71,16 +73,20 @@ export async function paymentRoutes(server: FastifyInstance) {
   // 2. Initiate Payment (Universal Provider Router: HatPesa / SonicPesa)
   // --------------------------------------------------------------------------
   server.post('/initiate', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     schema: {
       tags: ['Payments'],
       summary: 'Initiate payment through HatPesa or SonicPesa gateway'
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    let businessId = (request as any).businessId;
-    if (!businessId && request.headers.authorization) {
+    let authBusinessId: string | null = null;
+    let authCustomerId: string | null = null;
+
+    if (request.headers.authorization) {
       try {
-        const payload = await request.jwtVerify<any>();
-        businessId = payload.businessId;
+        const payload: any = await request.jwtVerify();
+        authBusinessId = payload.businessId || null;
+        authCustomerId = payload.customerId || null;
       } catch (_) {}
     }
 
@@ -91,46 +97,90 @@ export async function paymentRoutes(server: FastifyInstance) {
 
     const { agreementType, agreementId, amount, phoneNumber, provider, paymentMethod } = parse.data;
 
+    let businessId = '';
     let customerId = '';
     let customerEmail = 'customer@luxeenet.com';
     let customerName = 'HatLock Customer';
     let agreementNumber = '';
     let deviceId: string | null = null;
+    let customerPhoneOnRecord: string | null = null;
 
     if (agreementType === 'HIRE_PURCHASE') {
       const where: any = { id: agreementId };
-      if (businessId) where.businessId = businessId;
+      if (authBusinessId) where.businessId = authBusinessId;
 
       const hp = await prisma.financingAgreement.findFirst({
         where,
         include: { customer: true }
       });
       if (!hp) return reply.status(404).send({ error: 'AGREEMENT_NOT_FOUND', message: 'Financing agreement not found' });
+
       businessId = hp.businessId;
       customerId = hp.customerId;
       agreementNumber = hp.agreementNumber;
       deviceId = hp.deviceId;
+      customerPhoneOnRecord = hp.customer?.phone || null;
+
       if (hp.customer) {
         customerEmail = hp.customer.email || 'customer@luxeenet.com';
         customerName = `${hp.customer.firstName} ${hp.customer.lastName}`;
       }
     } else {
       const where: any = { id: agreementId };
-      if (businessId) where.businessId = businessId;
+      if (authBusinessId) where.businessId = authBusinessId;
 
       const rt = await prisma.rentalAgreement.findFirst({
         where,
         include: { customer: true }
       });
       if (!rt) return reply.status(404).send({ error: 'AGREEMENT_NOT_FOUND', message: 'Rental agreement not found' });
+
       businessId = rt.businessId;
       customerId = rt.customerId;
       agreementNumber = rt.agreementNumber;
       deviceId = rt.deviceId;
+      customerPhoneOnRecord = rt.customer?.phone || null;
+
       if (rt.customer) {
         customerEmail = rt.customer.email || 'customer@luxeenet.com';
         customerName = `${rt.customer.firstName} ${rt.customer.lastName}`;
       }
+    }
+
+    // Agreement Ownership & Customer Privacy Verification:
+    // 1. If business staff authenticated: authorized if business matches.
+    // 2. If customer authenticated: authorized if customerId matches.
+    // 3. If unauthenticated / guest (portal): phoneNumber MUST match the customer phone on record!
+    const isStaff = Boolean(authBusinessId && authBusinessId === businessId);
+    const isCustomerOwner = Boolean(authCustomerId && authCustomerId === customerId);
+    const isPhoneMatched = Boolean(customerPhoneOnRecord && phoneNumbersMatch(phoneNumber, customerPhoneOnRecord));
+
+    if (!isStaff && !isCustomerOwner && !isPhoneMatched) {
+      return reply.status(403).send({
+        error: 'ACCESS_DENIED',
+        message: 'The provided phone number does not match the customer record on this agreement.'
+      });
+    }
+
+    // Duplicate Submission Protection (60-second in-flight lock for identical amount & agreement)
+    const recentPending = await prisma.paymentTransaction.findFirst({
+      where: {
+        OR: [
+          { financingAgreementId: agreementId },
+          { rentalAgreementId: agreementId }
+        ],
+        amountTZS: amount,
+        status: TransactionStatus.PENDING,
+        createdAt: { gte: new Date(Date.now() - 60 * 1000) }
+      }
+    });
+
+    if (recentPending) {
+      return reply.status(409).send({
+        error: 'DUPLICATE_PAYMENT_PENDING',
+        message: 'A payment for this agreement is already being processed. Please authorize the prompt on your phone.',
+        reference: recentPending.transactionReference
+      });
     }
 
     const reference = `${provider === 'SONICPESA' ? 'SP' : 'HP'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -185,7 +235,7 @@ export async function paymentRoutes(server: FastifyInstance) {
           }
         });
 
-        // Save order_id against the payment record (still PENDING until customer enters PIN on mobile phone)
+        // Save order_id against the payment record (strictly PENDING until verified settlement)
         const updatedPayment = await prisma.paymentTransaction.update({
           where: { id: payment.id },
           data: {
@@ -204,12 +254,8 @@ export async function paymentRoutes(server: FastifyInstance) {
         });
       } catch (err: any) {
         server.log.error({ err: err.message, reference }, 'SonicPesa API call failed');
-        await prisma.paymentTransaction.update({
-          where: { id: payment.id },
-          data: {
-            status: TransactionStatus.FAILED,
-            failReason: err.message || 'SonicPesa provider communication failed'
-          }
+        await transitionPaymentTransaction(prisma, payment.id, TransactionStatus.FAILED, {
+          failReason: err.message || 'SonicPesa provider communication failed'
         });
         return reply.status(502).send({
           error: 'GATEWAY_ERROR',
@@ -254,12 +300,8 @@ export async function paymentRoutes(server: FastifyInstance) {
       });
     } catch (err: any) {
       server.log.error({ err: err.message, reference }, 'HatPesa API call failed');
-      await prisma.paymentTransaction.update({
-        where: { id: payment.id },
-        data: {
-          status: TransactionStatus.FAILED,
-          failReason: err.message || 'HatPesa provider communication failed'
-        }
+      await transitionPaymentTransaction(prisma, payment.id, TransactionStatus.FAILED, {
+        failReason: err.message || 'HatPesa provider communication failed'
       });
       return reply.status(502).send({
         error: 'GATEWAY_ERROR',
@@ -273,12 +315,26 @@ export async function paymentRoutes(server: FastifyInstance) {
   // 3. Public Payment Status Check (Customer Portal & Webhooks)
   // --------------------------------------------------------------------------
   server.get('/status/:reference', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
     schema: {
       tags: ['Payments'],
       summary: 'Get public transaction status by payment reference'
     }
   }, async (request: any, reply: FastifyReply) => {
     const { reference } = request.params || {};
+    const queryPhone = request.query?.phone || request.headers?.['x-customer-phone'];
+
+    let authBusinessId: string | null = null;
+    let authCustomerId: string | null = null;
+
+    if (request.headers.authorization) {
+      try {
+        const payload: any = await request.jwtVerify();
+        authBusinessId = payload.businessId || null;
+        authCustomerId = payload.customerId || null;
+      } catch (_) {}
+    }
+
     const payment = await prisma.paymentTransaction.findFirst({
       where: {
         OR: [
@@ -288,16 +344,8 @@ export async function paymentRoutes(server: FastifyInstance) {
           { idempotencyKey: reference }
         ]
       },
-      select: {
-        id: true,
-        transactionReference: true,
-        status: true,
-        amountTZS: true,
-        currency: true,
-        paymentProvider: true,
-        paymentMethod: true,
-        createdAt: true,
-        failReason: true
+      include: {
+        customer: true
       }
     });
 
@@ -305,19 +353,82 @@ export async function paymentRoutes(server: FastifyInstance) {
       return reply.status(404).send({ error: 'TRANSACTION_NOT_FOUND', message: 'Transaction reference not found' });
     }
 
-    return reply.send({ payment });
+    // Ownership & Privacy verification:
+    // Disallow arbitrary access without proof of ownership
+    const isStaff = Boolean(authBusinessId && authBusinessId === payment.businessId);
+    const isCustomerOwner = Boolean(authCustomerId && authCustomerId === payment.customerId);
+    const isPhoneVerified = Boolean(queryPhone && payment.customer?.phone && phoneNumbersMatch(queryPhone, payment.customer.phone));
+
+    if (!isStaff && !isCustomerOwner && !isPhoneVerified) {
+      return reply.status(403).send({
+        error: 'ACCESS_DENIED',
+        message: 'Customer verification or authorization required to access transaction details'
+      });
+    }
+
+    return reply.send({
+      payment: {
+        id: payment.id,
+        transactionReference: payment.transactionReference,
+        status: payment.status,
+        amountTZS: payment.amountTZS,
+        currency: payment.currency,
+        paymentProvider: payment.paymentProvider,
+        paymentMethod: payment.paymentMethod,
+        createdAt: payment.createdAt,
+        failReason: payment.failReason
+      }
+    });
   });
 
   // --------------------------------------------------------------------------
   // 4. Payment History for Agreement (Customer Portal)
   // --------------------------------------------------------------------------
   server.get('/history/:agreementId', {
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
     schema: {
       tags: ['Payments'],
       summary: 'Get payment history for agreement'
     }
   }, async (request: any, reply: FastifyReply) => {
     const { agreementId } = request.params || {};
+    const queryPhone = request.query?.phone || request.headers?.['x-customer-phone'];
+
+    let authBusinessId: string | null = null;
+    let authCustomerId: string | null = null;
+
+    if (request.headers.authorization) {
+      try {
+        const payload: any = await request.jwtVerify();
+        authBusinessId = payload.businessId || null;
+        authCustomerId = payload.customerId || null;
+      } catch (_) {}
+    }
+
+    // Check agreement existence in either financing or rental
+    const agreement = (await prisma.financingAgreement.findUnique({
+      where: { id: agreementId },
+      include: { customer: true }
+    })) || (await prisma.rentalAgreement.findUnique({
+      where: { id: agreementId },
+      include: { customer: true }
+    }));
+
+    if (!agreement) {
+      return reply.status(404).send({ error: 'AGREEMENT_NOT_FOUND', message: 'Agreement not found' });
+    }
+
+    const isStaff = Boolean(authBusinessId && authBusinessId === agreement.businessId);
+    const isCustomerOwner = Boolean(authCustomerId && authCustomerId === agreement.customerId);
+    const isPhoneVerified = Boolean(queryPhone && agreement.customer?.phone && phoneNumbersMatch(queryPhone, agreement.customer.phone));
+
+    if (!isStaff && !isCustomerOwner && !isPhoneVerified) {
+      return reply.status(403).send({
+        error: 'ACCESS_DENIED',
+        message: 'Customer verification or authorization required to access payment history'
+      });
+    }
+
     const payments = await prisma.paymentTransaction.findMany({
       where: {
         OR: [

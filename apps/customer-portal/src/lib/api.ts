@@ -70,8 +70,11 @@ export const customerApi = {
   /**
    * Check real status of payment transaction from backend
    */
-  async checkPaymentStatus(reference: string): Promise<TransactionStatusResponse> {
-    const res = await fetch(`${API_BASE}/api/v1/payments/status/${encodeURIComponent(reference)}`, {
+  async checkPaymentStatus(reference: string, phone?: string): Promise<TransactionStatusResponse> {
+    const url = new URL(`${API_BASE}/api/v1/payments/status/${encodeURIComponent(reference)}`);
+    if (phone) url.searchParams.set('phone', phone);
+
+    const res = await fetch(url.toString(), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -90,8 +93,11 @@ export const customerApi = {
   /**
    * Fetch verified payment history for an agreement
    */
-  async getPaymentHistory(agreementId: string): Promise<any[]> {
-    const res = await fetch(`${API_BASE}/api/v1/payments/history/${encodeURIComponent(agreementId)}`, {
+  async getPaymentHistory(agreementId: string, phone?: string): Promise<any[]> {
+    const url = new URL(`${API_BASE}/api/v1/payments/history/${encodeURIComponent(agreementId)}`);
+    if (phone) url.searchParams.set('phone', phone);
+
+    const res = await fetch(url.toString(), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'

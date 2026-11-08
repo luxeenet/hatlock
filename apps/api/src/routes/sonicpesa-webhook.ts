@@ -9,6 +9,7 @@ import { recordRentalPayment } from '../services/rental.js';
 import { AgreementType, TransactionStatus, VerificationStatus, AuditAction } from '@prisma/client';
 import { logger } from '../lib/logger.js';
 import { auditLog } from '../services/audit.js';
+import { transitionPaymentTransaction } from '../services/payment-state-machine.js';
 
 const sonicpesa = initSonicPesa({
   baseUrl: env.SONICPESA_BASE_URL,
@@ -99,15 +100,11 @@ export async function sonicpesaWebhookRoutes(server: FastifyInstance) {
       const mappedStatus =
         (verifiedStatus === 'CANCELLED' || verifiedStatus === 'REJECTED') ? TransactionStatus.FAILED : TransactionStatus.PENDING;
 
-      await prisma.paymentTransaction.update({
-        where: { id: transaction.id },
-        data: {
-          status: mappedStatus,
-          verificationStatus: VerificationStatus.FAILED,
-          failReason: `SonicPesa status: ${verifiedStatus}`,
-          webhookReceivedAt: new Date(),
-          providerMetadata: payload
-        }
+      await transitionPaymentTransaction(prisma, transaction.id, mappedStatus, {
+        verificationStatus: VerificationStatus.FAILED,
+        failReason: `SonicPesa status: ${verifiedStatus}`,
+        webhookReceivedAt: new Date(),
+        providerMetadata: payload
       });
 
       return reply.status(200).send({ received: true, status: mappedStatus });
@@ -117,19 +114,15 @@ export async function sonicpesaWebhookRoutes(server: FastifyInstance) {
     const verifiedAmount = Number(amount || transaction.amountTZS);
 
     const updatedTxn = await prisma.$transaction(async (tx) => {
-      return tx.paymentTransaction.update({
-        where: { id: transaction.id },
-        data: {
-          status: TransactionStatus.COMPLETED,
-          verificationStatus: VerificationStatus.VERIFIED,
-          reconciliationStatus: 'RECONCILED',
-          providerReference: transaction_id || order_id,
-          paymentMethod: channel || 'SONICPESA_MOBILE',
-          verifiedAt: new Date(),
-          reconciledAt: new Date(),
-          webhookReceivedAt: new Date(),
-          providerMetadata: payload
-        }
+      return transitionPaymentTransaction(tx, transaction.id, TransactionStatus.COMPLETED, {
+        verificationStatus: VerificationStatus.VERIFIED,
+        reconciliationStatus: 'RECONCILED',
+        providerReference: transaction_id || order_id,
+        paymentMethod: channel || 'SONICPESA_MOBILE',
+        verifiedAt: new Date(),
+        reconciledAt: new Date(),
+        webhookReceivedAt: new Date(),
+        providerMetadata: payload
       });
     });
 
