@@ -283,7 +283,27 @@ export async function authRoutes(server: FastifyInstance) {
       include: { user: { include: { employee: { select: { businessId: true } } } } }
     });
 
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
+    if (stored && stored.revokedAt) {
+      // Refresh token reuse detected! Compromised token family -> Revoke all tokens for this user
+      await prisma.refreshToken.updateMany({
+        where: { userId: stored.userId, revokedAt: null },
+        data: { revokedAt: new Date() }
+      });
+      await auditLog({
+        actorId: stored.userId,
+        actorRole: stored.user?.role,
+        action: AuditAction.UPDATE,
+        resource: 'RefreshTokenFamily',
+        resourceId: stored.id,
+        metadata: { alert: 'REFRESH_TOKEN_REUSE_DETECTED', ip: request.ip }
+      });
+      return reply.status(401).send({
+        error: 'REVOKED_TOKEN_REUSE',
+        message: 'Security alert: Refresh token reuse detected. All active sessions have been revoked.'
+      });
+    }
+
+    if (!stored || stored.expiresAt < new Date()) {
       return reply.status(401).send({ error: 'INVALID_TOKEN', message: 'Refresh token invalid or expired' });
     }
 

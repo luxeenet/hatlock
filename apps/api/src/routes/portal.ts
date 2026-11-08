@@ -66,8 +66,8 @@ export async function portalRoutes(server: FastifyInstance) {
       success: true,
       message: 'Verification code sent to registered mobile number',
       phone: customer.phone,
-      // Provide devOtp only in test environment for automated testing
-      ...(process.env.NODE_ENV === 'test' || env.HATPESA_TEST_MODE ? { devOtp: otp } : {})
+      // Provide devOtp strictly in automated test environment only
+      ...(process.env.NODE_ENV === 'test' ? { devOtp: otp } : {})
     });
   });
 
@@ -89,6 +89,7 @@ export async function portalRoutes(server: FastifyInstance) {
     const { phone, code } = parse.data;
     const cleanPhone = normalizePhoneNumber(phone);
     const redisKey = `customer_otp:${cleanPhone}`;
+    const attemptsKey = `customer_otp_attempts:${cleanPhone}`;
 
     const storedHash = await redis.get(redisKey);
     if (!storedHash) {
@@ -98,16 +99,35 @@ export async function portalRoutes(server: FastifyInstance) {
       });
     }
 
+    // Rate-limiting brute force check
+    const attempts = await redis.incr(attemptsKey);
+    if (attempts === 1) {
+      await redis.expire(attemptsKey, 300);
+    }
+    if (attempts > 5) {
+      await redis.del(redisKey);
+      await redis.del(attemptsKey);
+      return reply.status(429).send({
+        error: 'TOO_MANY_ATTEMPTS',
+        message: 'Too many incorrect attempts. This code has been invalidated for security. Please request a new code.'
+      });
+    }
+
     const submittedHash = crypto.createHash('sha256').update(code).digest('hex');
-    if (storedHash !== submittedHash) {
+    const storedBuf = Buffer.from(storedHash);
+    const submittedBuf = Buffer.from(submittedHash);
+    const hashesMatch = storedBuf.length === submittedBuf.length && crypto.timingSafeEqual(storedBuf, submittedBuf);
+
+    if (!hashesMatch) {
       return reply.status(401).send({
         error: 'INVALID_CODE',
         message: 'Invalid verification code. Please check the code received on your phone.'
       });
     }
 
-    // Consume OTP immediately to prevent replay attacks
+    // Consume OTP and reset attempts immediately upon success to prevent replay attacks
     await redis.del(redisKey);
+    await redis.del(attemptsKey);
 
     // Fetch customer details
     const customers = await prisma.customer.findMany({

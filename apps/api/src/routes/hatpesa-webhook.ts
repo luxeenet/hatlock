@@ -114,7 +114,29 @@ export async function hatpesaWebhookRoutes(server: FastifyInstance) {
       return reply.status(200).send({ received: true });
     }
 
-    // 6. Mark transaction as verified and completed
+    // 6. Validate expected amount and currency before settlement
+    const settledAmount = Number(verified.amount ?? amount ?? transaction.amountTZS);
+    if (settledAmount < Number(transaction.amountTZS)) {
+      logger.warn({ reference, expected: transaction.amountTZS, received: settledAmount }, 'HatPesa webhook: Underpayment / amount mismatch');
+      await transitionPaymentTransaction(prisma, transaction.id, TransactionStatus.FAILED, {
+        verificationStatus: VerificationStatus.FAILED,
+        failReason: `Amount mismatch: expected ${transaction.amountTZS}, received ${settledAmount}`,
+        webhookReceivedAt: new Date()
+      });
+      return reply.status(200).send({ received: true, error: 'AMOUNT_MISMATCH' });
+    }
+
+    if (currency && currency.toUpperCase() !== transaction.currency) {
+      logger.warn({ reference, expected: transaction.currency, received: currency }, 'HatPesa webhook: Currency mismatch');
+      await transitionPaymentTransaction(prisma, transaction.id, TransactionStatus.FAILED, {
+        verificationStatus: VerificationStatus.FAILED,
+        failReason: `Currency mismatch: expected ${transaction.currency}, received ${currency}`,
+        webhookReceivedAt: new Date()
+      });
+      return reply.status(200).send({ received: true, error: 'CURRENCY_MISMATCH' });
+    }
+
+    // 7. Mark transaction as verified and completed
     await transitionPaymentTransaction(prisma, transaction.id, TransactionStatus.COMPLETED, {
       verificationStatus: VerificationStatus.VERIFIED,
       providerReference: verified.providerReference ?? providerReference,
@@ -122,13 +144,13 @@ export async function hatpesaWebhookRoutes(server: FastifyInstance) {
       verifiedAt: new Date()
     });
 
-    // 7. Apply payment to agreement
+    // 8. Apply payment to agreement
     try {
       if (transaction.agreementType === AgreementType.HIRE_PURCHASE && transaction.financingAgreementId) {
         const result = await recordFinancingPayment(
           transaction.financingAgreementId,
           transaction.businessId,
-          amount,
+          settledAmount,
           transaction.id,
           'HATPESA_WEBHOOK'
         );

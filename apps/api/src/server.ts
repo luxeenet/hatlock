@@ -48,22 +48,22 @@ import { tenantMiddleware } from './middleware/tenant.js';
 import { authMiddleware } from './middleware/auth.js';
 
 // Workers
-import { startWorkers } from './workers/index.js';
-
-const server = Fastify({
-  logger: {
-    level: env.LOG_LEVEL,
-    serializers: {
-      req(req) {
-        return { method: req.method, url: req.url, remoteAddress: req.ip };
-      }
-    }
-  },
-  trustProxy: true,
-  maxParamLength: 500
-});
+import { startWorkers, stopWorkers } from './workers/index.js';
 
 async function buildServer() {
+  const server = Fastify({
+    logger: {
+      level: env.LOG_LEVEL,
+      serializers: {
+        req(req) {
+          return { method: req.method, url: req.url, remoteAddress: req.ip };
+        }
+      }
+    },
+    trustProxy: true,
+    maxParamLength: 500
+  });
+
   // Security headers
   await server.register(helmet, {
     contentSecurityPolicy: {
@@ -85,29 +85,48 @@ async function buildServer() {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
   });
 
-  // Health check endpoints (production probe)
-  server.get('/health', { schema: { tags: ['System'], summary: 'System health check' } }, async (request, reply) => {
+  // Health check endpoint (production probe - checks both PostgreSQL & Redis)
+  server.get('/health', {
+    schema: { tags: ['System'], summary: 'System health probe (PostgreSQL & Redis)' }
+  }, async (request, reply) => {
+    let dbOk = false;
+    let redisOk = false;
+
     try {
       await prisma.$queryRaw`SELECT 1`;
-      return reply.send({
-        status: 'ok',
-        version: env.APP_VERSION,
-        database: 'connected',
-        timestamp: new Date().toISOString()
-      });
+      dbOk = true;
     } catch (err: any) {
-      server.log.error({ err }, 'Health check failed: database connectivity error');
-      return reply.status(503).send({
-        status: 'error',
-        version: env.APP_VERSION,
-        database: 'disconnected',
-        error: 'Database connection failed',
-        timestamp: new Date().toISOString()
-      });
+      server.log.error({ err: err?.message || 'Database connectivity error' }, 'Health check: database unavailable');
     }
+
+    try {
+      const pong = await redis.ping();
+      redisOk = pong === 'PONG';
+    } catch (err: any) {
+      server.log.error({ err: err?.message || 'Redis connectivity error' }, 'Health check: redis unavailable');
+    }
+
+    const isHealthy = dbOk && redisOk;
+    const responsePayload = {
+      status: isHealthy ? 'ok' : 'error',
+      version: env.APP_VERSION,
+      timestamp: new Date().toISOString(),
+      services: {
+        database: dbOk ? 'connected' : 'disconnected',
+        redis: redisOk ? 'connected' : 'disconnected'
+      }
+    };
+
+    if (!isHealthy) {
+      return reply.status(503).send(responsePayload);
+    }
+    return reply.status(200).send(responsePayload);
   });
 
-  server.get('/api/v1/health', { schema: { tags: ['System'], summary: 'API v1 health status' } }, async (request, reply) => {
+  // Preserved API v1 health endpoint
+  server.get('/api/v1/health', {
+    schema: { tags: ['System'], summary: 'API v1 health status' }
+  }, async (request, reply) => {
     return reply.send({
       status: 'ok',
       version: env.APP_VERSION,
@@ -164,20 +183,6 @@ async function buildServer() {
   await server.register(swaggerUi, {
     routePrefix: '/docs',
     uiConfig: { docExpansion: 'list', deepLinking: false }
-  });
-
-  // Health check (no auth required)
-  server.get('/health', {
-    schema: { hide: true }
-  }, async () => {
-    const dbOk = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
-    const redisOk = await redis.ping().then(() => true).catch(() => false);
-    return {
-      status: 'ok',
-      version: env.APP_VERSION,
-      timestamp: new Date().toISOString(),
-      services: { database: dbOk ? 'ok' : 'error', redis: redisOk ? 'ok' : 'error' }
-    };
   });
 
   // Auth middleware — decorates request with user context
@@ -252,6 +257,8 @@ async function buildServer() {
   return server;
 }
 
+let activeApp: any = null;
+
 async function start() {
   try {
     // Connect to database
@@ -262,13 +269,13 @@ async function start() {
     await redis.ping();
     logger.info('Redis connected');
 
-    const app = await buildServer();
+    activeApp = await buildServer();
 
     // Start background workers
     await startWorkers();
     logger.info('Background workers started');
 
-    await app.listen({ port: env.PORT, host: '0.0.0.0' });
+    await activeApp.listen({ port: env.PORT, host: '0.0.0.0' });
     logger.info(`HatLock API running on port ${env.PORT}`);
     logger.info(`API docs: http://localhost:${env.PORT}/docs`);
   } catch (err) {
@@ -282,7 +289,10 @@ const signals = ['SIGINT', 'SIGTERM'];
 signals.forEach((signal) => {
   process.on(signal, async () => {
     logger.info(`Received ${signal}, shutting down gracefully...`);
-    await server.close();
+    await stopWorkers();
+    if (activeApp) {
+      await activeApp.close();
+    }
     await prisma.$disconnect();
     redis.disconnect();
     process.exit(0);

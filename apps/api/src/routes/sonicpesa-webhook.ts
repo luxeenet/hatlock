@@ -110,8 +110,30 @@ export async function sonicpesaWebhookRoutes(server: FastifyInstance) {
       return reply.status(200).send({ received: true, status: mappedStatus });
     }
 
-    // 6. Verified SUCCESS — Process Atomic Double-Entry Settlement
-    const verifiedAmount = Number(amount || transaction.amountTZS);
+    // 6. Validate expected amount and currency before settlement
+    const settledAmount = Number(amount ?? transaction.amountTZS);
+    if (settledAmount < Number(transaction.amountTZS)) {
+      logger.warn({ order_id, expected: transaction.amountTZS, received: settledAmount }, 'SonicPesa webhook: Underpayment / amount mismatch');
+      await transitionPaymentTransaction(prisma, transaction.id, TransactionStatus.FAILED, {
+        verificationStatus: VerificationStatus.FAILED,
+        failReason: `Amount mismatch: expected ${transaction.amountTZS}, received ${settledAmount}`,
+        webhookReceivedAt: new Date()
+      });
+      return reply.status(200).send({ received: true, error: 'AMOUNT_MISMATCH' });
+    }
+
+    if (currency && currency.toUpperCase() !== transaction.currency) {
+      logger.warn({ order_id, expected: transaction.currency, received: currency }, 'SonicPesa webhook: Currency mismatch');
+      await transitionPaymentTransaction(prisma, transaction.id, TransactionStatus.FAILED, {
+        verificationStatus: VerificationStatus.FAILED,
+        failReason: `Currency mismatch: expected ${transaction.currency}, received ${currency}`,
+        webhookReceivedAt: new Date()
+      });
+      return reply.status(200).send({ received: true, error: 'CURRENCY_MISMATCH' });
+    }
+
+    // 7. Verified SUCCESS — Process Atomic Double-Entry Settlement
+    const verifiedAmount = settledAmount;
 
     const updatedTxn = await prisma.$transaction(async (tx) => {
       return transitionPaymentTransaction(tx, transaction.id, TransactionStatus.COMPLETED, {
