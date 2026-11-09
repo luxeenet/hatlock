@@ -19,6 +19,9 @@ COPY packages/ ./packages/
 COPY apps/customer-portal ./apps/customer-portal
 COPY tsconfig.json ./
 
+# Ensure public directory exists for static asset resolution
+RUN mkdir -p apps/customer-portal/public
+
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_API_URL=https://api.luxeenet.com
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
@@ -50,6 +53,7 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/apps/customer-portal/public ./apps/customer-portal/public
 COPY --from=builder /app/apps/customer-portal/.next ./apps/customer-portal/.next
+COPY --from=builder /app/apps/customer-portal/next.config.mjs ./apps/customer-portal/next.config.mjs
 
 EXPOSE 3001
 
