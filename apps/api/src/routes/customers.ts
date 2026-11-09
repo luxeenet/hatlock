@@ -107,4 +107,77 @@ export async function customerRoutes(server: FastifyInstance) {
 
     return reply.send({ customer });
   });
+
+  // Update customer
+  server.patch('/:customerId', {
+    schema: {
+      tags: ['Customers'],
+      summary: 'Update customer profile'
+    }
+  }, async (request: FastifyRequest<{ Params: { customerId: string } }>, reply: FastifyReply) => {
+    const businessId = (request as any).businessId;
+    const { customerId } = request.params;
+    const body = request.body as any;
+
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, businessId }
+    });
+
+    if (!customer) {
+      return reply.status(404).send({ error: 'CUSTOMER_NOT_FOUND', message: 'Customer does not exist' });
+    }
+
+    const updated = await prisma.customer.update({
+      where: { id: customerId },
+      data: {
+        ...(body.firstName && { firstName: body.firstName }),
+        ...(body.lastName && { lastName: body.lastName }),
+        ...(body.phone && { phone: body.phone }),
+        ...(body.email && { email: body.email }),
+        ...(body.idNumber && { nationalId: body.idNumber }),
+        ...(body.address !== undefined && { address: body.address }),
+        ...(body.city !== undefined && { city: body.city }),
+        ...(body.notes !== undefined && { notes: body.notes })
+      }
+    });
+
+    return reply.send({ customer: updated });
+  });
+
+  // Delete/Deactivate customer
+  server.delete('/:customerId', {
+    schema: {
+      tags: ['Customers'],
+      summary: 'Deactivate customer account'
+    }
+  }, async (request: FastifyRequest<{ Params: { customerId: string } }>, reply: FastifyReply) => {
+    const businessId = (request as any).businessId;
+    const { customerId } = request.params;
+
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, businessId },
+      include: {
+        financingAgreements: { where: { status: 'ACTIVE' } },
+        rentalAgreements: { where: { status: 'ACTIVE' } }
+      }
+    });
+
+    if (!customer) {
+      return reply.status(404).send({ error: 'CUSTOMER_NOT_FOUND', message: 'Customer does not exist' });
+    }
+
+    if (customer.financingAgreements.length > 0 || customer.rentalAgreements.length > 0) {
+      return reply.status(400).send({
+        error: 'CUSTOMER_HAS_ACTIVE_AGREEMENTS',
+        message: 'Cannot remove customer with active agreements. Complete or terminate agreements first.'
+      });
+    }
+
+    await prisma.customer.update({
+      where: { id: customerId },
+      data: { isActive: false }
+    });
+
+    return reply.send({ message: 'Customer deactivated successfully' });
+  });
 }

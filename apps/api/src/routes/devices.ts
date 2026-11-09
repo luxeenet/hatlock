@@ -253,4 +253,75 @@ export async function deviceRoutes(server: FastifyInstance) {
       return reply.send({ status: 'COMMAND_DISPATCHED', command });
     }
   });
+
+  // Update device details
+  server.patch('/:deviceId', {
+    schema: {
+      tags: ['Devices'],
+      summary: 'Update device metadata, condition, price or notes'
+    }
+  }, async (request: FastifyRequest<{ Params: { deviceId: string } }>, reply: FastifyReply) => {
+    const businessId = (request as any).businessId;
+    const { deviceId } = request.params;
+    const body = request.body as any;
+
+    const device = await prisma.device.findFirst({
+      where: { id: deviceId, businessId }
+    });
+
+    if (!device) {
+      return reply.status(404).send({ error: 'DEVICE_NOT_FOUND', message: 'Device not found' });
+    }
+
+    const updated = await prisma.device.update({
+      where: { id: deviceId },
+      data: {
+        ...(body.notes !== undefined && { notes: body.notes }),
+        ...(body.condition !== undefined && { physicalCondition: body.condition }),
+        ...(body.purchasePrice !== undefined && { purchasePrice: body.purchasePrice }),
+        ...(body.branchId !== undefined && { branchId: body.branchId }),
+        ...(body.model !== undefined && { model: body.model }),
+        ...(body.status !== undefined && { status: body.status })
+      }
+    });
+
+    return reply.send({ device: updated });
+  });
+
+  // Retire or remove device
+  server.delete('/:deviceId', {
+    schema: {
+      tags: ['Devices'],
+      summary: 'Retire or delete device from inventory'
+    }
+  }, async (request: FastifyRequest<{ Params: { deviceId: string } }>, reply: FastifyReply) => {
+    const businessId = (request as any).businessId;
+    const { deviceId } = request.params;
+
+    const device = await prisma.device.findFirst({
+      where: { id: deviceId, businessId },
+      include: {
+        financingAgreements: { where: { status: 'ACTIVE' } },
+        rentalAgreements: { where: { status: 'ACTIVE' } }
+      }
+    });
+
+    if (!device) {
+      return reply.status(404).send({ error: 'DEVICE_NOT_FOUND', message: 'Device not found' });
+    }
+
+    if (device.financingAgreements.length > 0 || device.rentalAgreements.length > 0) {
+      return reply.status(400).send({
+        error: 'DEVICE_IN_USE',
+        message: 'Cannot delete device with active financing or rental agreements. Return device first.'
+      });
+    }
+
+    await prisma.device.update({
+      where: { id: deviceId },
+      data: { isRetired: true, status: DeviceStatus.RETIRED, retiredAt: new Date() }
+    });
+
+    return reply.send({ message: 'Device retired successfully' });
+  });
 }

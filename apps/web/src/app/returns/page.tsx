@@ -12,7 +12,9 @@ import {
   Clock,
   RefreshCw,
   X,
-  ShieldCheck
+  ShieldCheck,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { apiReturns, apiRentals, DeviceReturn, RentalAgreement } from '../../lib/api';
 
@@ -21,6 +23,10 @@ export default function ReturnsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
 
   // Initiate Return Modal
   const [isInitiateModalOpen, setIsInitiateModalOpen] = useState(false);
@@ -190,7 +196,7 @@ export default function ReturnsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {returns.map(ret => {
+          {returns.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(ret => {
             const customerName = ret.customer ? `${ret.customer.firstName} ${ret.customer.lastName}` : 'Customer';
             const deviceName = ret.device ? `${ret.device.manufacturer} ${ret.device.model} (${ret.device.serialNumber})` : 'Hardware Device';
 
@@ -252,6 +258,35 @@ export default function ReturnsPage() {
               </div>
             );
           })}
+
+          {/* Pagination Controls */}
+          {returns.length > itemsPerPage && (
+            <div className="p-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 bg-navy-950/40 rounded-xl">
+              <div>
+                Page <span className="font-semibold text-white">{currentPage}</span> of{' '}
+                <span className="font-semibold text-white">{Math.ceil(returns.length / itemsPerPage) || 1}</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-700 transition-colors flex items-center gap-1"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  Previous
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(Math.ceil(returns.length / itemsPerPage) || 1, prev + 1))}
+                  disabled={currentPage === Math.ceil(returns.length / itemsPerPage) || currentPage * itemsPerPage >= returns.length}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-700 transition-colors flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

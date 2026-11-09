@@ -15,7 +15,9 @@ import {
   Sliders,
   Send,
   Zap,
-  Lock
+  Lock,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import {
   apiPayments,
@@ -34,6 +36,10 @@ export default function PaymentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [checkoutSuccess, setCheckoutSuccess] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'LEDGER' | 'PROVIDERS'>('LEDGER');
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Checkout Modal State
   const [checkoutModal, setCheckoutModal] = useState(false);
@@ -307,7 +313,7 @@ export default function PaymentsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 text-slate-200">
-                    {payments.map(payment => (
+                    {payments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(payment => (
                       <tr key={payment.id} className="hover:bg-slate-800/30 transition-colors">
                         <td className="p-4 pl-6">
                           <div className="font-mono text-xs font-bold text-emerald-400">
@@ -347,7 +353,7 @@ export default function PaymentsPage() {
                         </td>
 
                         <td className="p-4">
-                          {payment.status === 'SUCCESS' ? (
+                          {payment.status === 'SUCCESS' || (payment.status as string) === 'COMPLETED' ? (
                             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 w-fit">
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               Reconciled
@@ -367,6 +373,35 @@ export default function PaymentsPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            {!loading && payments.length > 0 && (
+              <div className="p-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 bg-navy-950/40">
+                <div>
+                  Page <span className="font-semibold text-white">{currentPage}</span> of{' '}
+                  <span className="font-semibold text-white">{Math.ceil(payments.length / itemsPerPage) || 1}</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-700 transition-colors flex items-center gap-1"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(payments.length / itemsPerPage) || 1, prev + 1))}
+                    disabled={currentPage === Math.ceil(payments.length / itemsPerPage) || currentPage * itemsPerPage >= payments.length}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-700 transition-colors flex items-center gap-1"
+                  >
+                    Next
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             )}
           </div>

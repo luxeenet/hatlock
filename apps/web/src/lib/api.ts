@@ -88,6 +88,19 @@ export const apiCustomers = {
     method: 'POST',
     body: JSON.stringify(data)
   }),
+  update: (id: string, data: Partial<{
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    idNumber: string;
+    address: string;
+    city: string;
+    notes: string;
+  }>) => request<{ customer: Customer }>(`/customers/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data)
+  }),
   delete: (id: string) => request<{ message: string }>(`/customers/${id}`, {
     method: 'DELETE'
   })
@@ -179,7 +192,50 @@ export const apiDevices = {
     request<{ commandId: string; action: string; status: string }>(`/devices/${deviceId}/command`, {
       method: 'POST',
       body: JSON.stringify(data)
-    })
+    }),
+  update: (id: string, data: Partial<{
+    notes: string;
+    condition: string;
+    purchasePrice: number;
+    model: string;
+    branchId: string;
+    status: string;
+  }>) => request<{ device: Device }>(`/devices/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data)
+  }),
+  delete: (id: string) => request<{ message: string }>(`/devices/${id}`, {
+    method: 'DELETE'
+  })
+};
+
+// ----------------------------------------------------------------------------
+// Dashboard Analytics
+// ----------------------------------------------------------------------------
+export interface DashboardKPIs {
+  totalDevices: number;
+  availableDevices: number;
+  activeFinancingCount: number;
+  activeRentalCount: number;
+  restrictedDevices: number;
+  gracePeriodDevices: number;
+  customerOwnedDevices: number;
+  totalCustomers: number;
+  totalRevenueTZS: number;
+  pendingCommandsCount: number;
+  osDistribution: {
+    windows: number;
+    linux: number;
+    other: number;
+  };
+  hardwareSecurity: {
+    tpmSecured: number;
+    standard: number;
+  };
+}
+
+export const apiDashboard = {
+  getMetrics: () => request<{ kpis: DashboardKPIs }>('/dashboard/metrics')
 };
 
 // ----------------------------------------------------------------------------
@@ -211,6 +267,7 @@ export const apiFinancing = {
     if (params?.customerId) query.set('customerId', params.customerId);
     return request<{ agreements: FinancingAgreement[] }>(`/financing?${query.toString()}`);
   },
+  get: (id: string) => request<{ agreement: any }>(`/financing/${id}`),
   create: (data: {
     customerId: string;
     deviceId: string;
@@ -257,6 +314,7 @@ export const apiRentals = {
     if (params?.status) query.set('status', params.status);
     return request<{ rentals: RentalAgreement[] }>(`/rentals?${query.toString()}`);
   },
+  get: (id: string) => request<{ rental: any }>(`/rentals/${id}`),
   create: (data: {
     customerId: string;
     deviceId: string;

@@ -20,7 +20,17 @@ import {
   QrCode,
   Download,
   Filter,
-  CheckCheck
+  CheckCheck,
+  Eye,
+  Edit2,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  ShieldAlert,
+  Clock,
+  Wifi,
+  WifiOff,
+  User
 } from 'lucide-react';
 import { apiDevices, Device } from '../../lib/api';
 
@@ -33,6 +43,10 @@ export default function DevicesPage() {
   const [selectedFilter, setSelectedFilter] = useState('ALL');
   const [selectedManufacturer, setSelectedManufacturer] = useState('ALL');
   const [selectedPlatform, setSelectedPlatform] = useState('ALL');
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
 
   // Register Device Modal
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -48,12 +62,30 @@ export default function DevicesPage() {
     notes: ''
   });
 
+  // Edit Device Modal
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingDevice, setEditingDevice] = useState<Device | null>(null);
+  const [editForm, setEditForm] = useState({
+    model: '',
+    condition: 'EXCELLENT',
+    purchasePrice: 0,
+    notes: ''
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // View Device Details Drawer
+  const [detailDevice, setDetailDevice] = useState<Device | null>(null);
+
   // Command Modal
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [commandModalOpen, setCommandModalOpen] = useState(false);
   const [commandType, setCommandType] = useState<'RESTRICT' | 'RESTORE'>('RESTRICT');
   const [commandReason, setCommandReason] = useState('Scheduled payment defaulted beyond grace period');
   const [executingCommand, setExecutingCommand] = useState(false);
+
+  // Delete / Retire Modal
+  const [retiringDevice, setRetiringDevice] = useState<Device | null>(null);
+  const [submittingRetire, setSubmittingRetire] = useState(false);
 
   // Provisioning Modal (Android Enterprise QR / Apple MDM profile)
   const [provisioningDevice, setProvisioningDevice] = useState<Device | null>(null);
@@ -69,6 +101,7 @@ export default function DevicesPage() {
         search: searchTerm || undefined
       });
       setDevices(data.devices || []);
+      setCurrentPage(1);
     } catch (err: any) {
       console.error('Failed to load devices:', err);
       setError(err.message || 'Failed to load device inventory.');
@@ -117,6 +150,61 @@ export default function DevicesPage() {
     }
   };
 
+  const handleOpenEdit = (device: Device) => {
+    setEditingDevice(device);
+    setEditForm({
+      model: device.model || '',
+      condition: device.condition || 'EXCELLENT',
+      purchasePrice: device.purchasePrice || 0,
+      notes: device.notes || ''
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDevice) return;
+    setSavingEdit(true);
+    setError(null);
+
+    try {
+      await apiDevices.update(editingDevice.id, {
+        model: editForm.model,
+        condition: editForm.condition,
+        purchasePrice: Number(editForm.purchasePrice) || undefined,
+        notes: editForm.notes
+      });
+
+      setActionSuccess(`Hardware profile for ${editingDevice.serialNumber} updated.`);
+      setIsEditModalOpen(false);
+      setEditingDevice(null);
+      await loadDevices();
+      setTimeout(() => setActionSuccess(null), 4000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update device.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleRetireDevice = async () => {
+    if (!retiringDevice) return;
+    setSubmittingRetire(true);
+    setError(null);
+
+    try {
+      await apiDevices.delete(retiringDevice.id);
+      setActionSuccess(`Device ${retiringDevice.serialNumber} retired successfully.`);
+      setRetiringDevice(null);
+      await loadDevices();
+      setTimeout(() => setActionSuccess(null), 4000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to retire device.');
+    } finally {
+      setSubmittingRetire(false);
+    }
+  };
+
   const handleExecuteCommand = async () => {
     if (!selectedDevice) return;
     setExecutingCommand(true);
@@ -145,46 +233,54 @@ export default function DevicesPage() {
     }
   };
 
+  // Search filtering including IMEI
   const filteredDevices = devices.filter(d => {
     const term = searchTerm.toLowerCase();
-    const customer =
-      d.financingAgreements?.[0]?.customer || d.rentalAgreements?.[0]?.customer;
+    const customer = d.financingAgreements?.[0]?.customer || d.rentalAgreements?.[0]?.customer;
     const custName = customer ? `${customer.firstName} ${customer.lastName}`.toLowerCase() : '';
+    const imei1 = d.identity?.imei1?.toLowerCase() || '';
+    const imei2 = d.identity?.imei2?.toLowerCase() || '';
 
     return (
       d.serialNumber.toLowerCase().includes(term) ||
       d.model.toLowerCase().includes(term) ||
       d.manufacturer.toLowerCase().includes(term) ||
+      imei1.includes(term) ||
+      imei2.includes(term) ||
       custName.includes(term)
     );
   });
+
+  // Pagination calculation
+  const totalPages = Math.ceil(filteredDevices.length / itemsPerPage) || 1;
+  const paginatedDevices = filteredDevices.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
             <Laptop className="w-6 h-6 text-cyan-400" />
             Universal Fleet & Device Security Hub
           </h1>
-          <p className="text-slate-400 text-sm mt-0.5">
+          <p className="text-slate-400 text-xs sm:text-sm mt-0.5">
             Cross-brand management for Windows, Linux, Android Enterprise, and Apple MDM with cryptographic locks.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3">
           <button
             onClick={loadDevices}
             title="Scan & Refresh Devices"
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium border border-slate-700 flex items-center gap-2 transition-colors"
+            className="px-3.5 sm:px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-medium border border-slate-700 flex items-center gap-2 transition-colors"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Scan Devices
           </button>
           <button
             onClick={() => setIsRegisterModalOpen(true)}
-            className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-navy-950 text-sm font-semibold flex items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+            className="px-3.5 sm:px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-navy-950 text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
           >
             <Plus className="w-4 h-4" />
             Register Device
@@ -194,14 +290,14 @@ export default function DevicesPage() {
 
       {actionSuccess && (
         <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm flex items-center gap-2">
-          <ShieldCheck className="w-5 h-5 flex-shrink-0" />
+          <ShieldCheck className="w-5 h-5 shrink-0" />
           <span>{actionSuccess}</span>
         </div>
       )}
 
       {error && (
         <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm flex items-center gap-2">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <AlertCircle className="w-5 h-5 shrink-0" />
           <span>{error}</span>
         </div>
       )}
@@ -213,19 +309,19 @@ export default function DevicesPage() {
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
             <input
               type="text"
-              placeholder="Search serial, model, brand, or borrower..."
+              placeholder="Search serial, IMEI, model, brand, or borrower..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-slate-900/80 border border-slate-700/80 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
             />
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto text-xs">
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto text-xs pb-1 sm:pb-0">
             {['ALL', 'AVAILABLE', 'ACTIVE', 'RESTRICTED', 'GRACE_PERIOD', 'CUSTOMER_OWNED'].map(f => (
               <button
                 key={f}
                 onClick={() => setSelectedFilter(f)}
-                className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-colors ${
                   selectedFilter === f
                     ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -237,7 +333,7 @@ export default function DevicesPage() {
           </div>
         </div>
 
-        {/* Secondary Universal Filters */}
+        {/* Secondary Filters */}
         <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-800/60 text-xs text-slate-400">
           <div className="flex items-center gap-1.5">
             <Filter className="w-3.5 h-3.5 text-slate-500" />
@@ -276,6 +372,10 @@ export default function DevicesPage() {
               <option value="Apple">Apple MDM</option>
             </select>
           </div>
+
+          <div className="ml-auto text-slate-400">
+            Showing <span className="font-semibold text-white">{filteredDevices.length}</span> devices
+          </div>
         </div>
       </div>
 
@@ -300,14 +400,14 @@ export default function DevicesPage() {
               <thead className="bg-slate-900/60 border-b border-slate-800 text-slate-400 text-xs font-semibold uppercase tracking-wider">
                 <tr>
                   <th className="p-4 pl-6">Hardware Profile</th>
-                  <th className="p-4">OS & Security Level</th>
+                  <th className="p-4">OS & Security</th>
                   <th className="p-4">Protection Status</th>
                   <th className="p-4">Borrower / Contract</th>
                   <th className="p-4 text-right pr-6">Management Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-slate-200">
-                {filteredDevices.map(device => {
+                {paginatedDevices.map(device => {
                   const activeHP = device.financingAgreements?.[0];
                   const activeRental = device.rentalAgreements?.[0];
                   const activeCustomer = activeHP?.customer || activeRental?.customer;
@@ -316,7 +416,7 @@ export default function DevicesPage() {
                     <tr key={device.id} className="hover:bg-slate-800/30 transition-colors">
                       <td className="p-4 pl-6">
                         <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-300">
+                          <div className="p-2 rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-300 shrink-0">
                             {device.currentOS === 'ANDROID' || device.currentOS === 'IOS' ? (
                               <Smartphone className="w-5 h-5 text-indigo-400" />
                             ) : (
@@ -418,7 +518,25 @@ export default function DevicesPage() {
                       </td>
 
                       <td className="p-4 pr-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5 sm:gap-2">
+                          {/* View details */}
+                          <button
+                            onClick={() => setDetailDevice(device)}
+                            title="View Full Hardware Profile"
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+
+                          {/* Edit device */}
+                          <button
+                            onClick={() => handleOpenEdit(device)}
+                            title="Edit Device Information"
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+
                           {/* Provisioning Shortcut for Mobile Devices */}
                           {(device.currentOS === 'ANDROID' || device.currentOS === 'IOS') && (
                             <button
@@ -455,6 +573,15 @@ export default function DevicesPage() {
                               Lock Device
                             </button>
                           )}
+
+                          {/* Retire / Delete */}
+                          <button
+                            onClick={() => setRetiringDevice(device)}
+                            title="Retire Device"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -464,12 +591,262 @@ export default function DevicesPage() {
             </table>
           </div>
         )}
+
+        {/* Pagination Toolbar */}
+        {!loading && filteredDevices.length > 0 && (
+          <div className="p-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 bg-navy-950/40">
+            <div>
+              Page <span className="font-semibold text-white">{currentPage}</span> of{' '}
+              <span className="font-semibold text-white">{totalPages}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-700 transition-colors flex items-center gap-1"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                Previous
+              </button>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-700 transition-colors flex items-center gap-1"
+              >
+                Next
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Device Details Modal */}
+      {detailDevice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                  <Laptop className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">
+                    {detailDevice.manufacturer} {detailDevice.model}
+                  </h2>
+                  <p className="text-xs font-mono text-cyan-400">S/N: {detailDevice.serialNumber}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDetailDevice(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 mt-5 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                  <span className="text-slate-400">Status</span>
+                  <div className="font-bold text-white mt-0.5">{detailDevice.status}</div>
+                </div>
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                  <span className="text-slate-400">Platform</span>
+                  <div className="font-bold text-white mt-0.5">{detailDevice.currentOS || 'WINDOWS'}</div>
+                </div>
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                  <span className="text-slate-400">Acquisition Cost</span>
+                  <div className="font-bold text-emerald-400 font-mono mt-0.5">
+                    TZS {detailDevice.purchasePrice?.toLocaleString() || 'N/A'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Cryptographic & Security Info */}
+              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                <div className="font-bold text-white text-xs flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  Hardware Security Attestation
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-slate-300">
+                  <div>TPM 2.0 State: <strong className="text-emerald-400">{detailDevice.identity?.tpmPresent !== false ? 'Present & Bound' : 'None'}</strong></div>
+                  <div>Secure Boot: <strong className="text-cyan-400">{detailDevice.identity?.secureBoot ? 'Enabled' : 'Standard'}</strong></div>
+                  {detailDevice.identity?.imei1 && (
+                    <div>Primary IMEI: <strong className="text-indigo-400 font-mono">{detailDevice.identity.imei1}</strong></div>
+                  )}
+                  {detailDevice.identity?.playIntegrityVerdict && (
+                    <div>Play Integrity: <strong className="text-emerald-400">{detailDevice.identity.playIntegrityVerdict}</strong></div>
+                  )}
+                  {detailDevice.complianceStatus && (
+                    <div>Compliance: <strong className="text-white">{detailDevice.complianceStatus}</strong></div>
+                  )}
+                </div>
+              </div>
+
+              {/* Borrower & Agreement */}
+              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                <div className="font-bold text-white text-xs flex items-center gap-2">
+                  <User className="w-4 h-4 text-amber-400" />
+                  Active Borrower & Agreement Assignment
+                </div>
+                {detailDevice.financingAgreements?.[0] ? (
+                  <div className="text-slate-300 space-y-1">
+                    <div>Customer: <strong>{detailDevice.financingAgreements[0].customer.firstName} {detailDevice.financingAgreements[0].customer.lastName}</strong></div>
+                    <div>Hire Purchase Contract: <span className="font-mono text-indigo-400">{detailDevice.financingAgreements[0].agreementNumber}</span></div>
+                    {detailDevice.financingAgreements[0].remainingBalanceTZS !== undefined && (
+                      <div>Remaining Balance: <span className="font-mono text-emerald-400">TZS {detailDevice.financingAgreements[0].remainingBalanceTZS.toLocaleString()}</span></div>
+                    )}
+                  </div>
+                ) : detailDevice.rentalAgreements?.[0] ? (
+                  <div className="text-slate-300 space-y-1">
+                    <div>Customer: <strong>{detailDevice.rentalAgreements[0].customer.firstName} {detailDevice.rentalAgreements[0].customer.lastName}</strong></div>
+                    <div>Rental Agreement: <span className="font-mono text-purple-400">{detailDevice.rentalAgreements[0].agreementNumber}</span></div>
+                  </div>
+                ) : (
+                  <div className="text-slate-500 italic">No customer agreement assigned. Ready in warehouse inventory.</div>
+                )}
+              </div>
+
+              {detailDevice.notes && (
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-slate-300">
+                  <span className="text-slate-400 block mb-1">Administrative Notes:</span>
+                  {detailDevice.notes}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-4 mt-4 border-t border-slate-800 flex justify-end">
+              <button
+                onClick={() => setDetailDevice(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Device Modal */}
+      {isEditModalOpen && editingDevice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-base font-bold text-white">Edit Hardware Profile</h3>
+              </div>
+              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4 mt-4 text-xs">
+              <div>
+                <label className="block text-slate-300 font-medium mb-1">Model Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.model}
+                  onChange={e => setEditForm({ ...editForm, model: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-medium mb-1">Physical Condition</label>
+                <select
+                  value={editForm.condition}
+                  onChange={e => setEditForm({ ...editForm, condition: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500"
+                >
+                  <option value="EXCELLENT">Brand New / Factory Sealed</option>
+                  <option value="GOOD">Refurbished - Grade A</option>
+                  <option value="FAIR">Used - Functional</option>
+                  <option value="POOR">Needs Maintenance</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-medium mb-1">Acquisition Cost (TZS)</label>
+                <input
+                  type="number"
+                  value={editForm.purchasePrice}
+                  onChange={e => setEditForm({ ...editForm, purchasePrice: Number(e.target.value) })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-medium mb-1">Notes</label>
+                <textarea
+                  rows={3}
+                  value={editForm.notes}
+                  onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-800 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-navy-950 font-bold disabled:opacity-50"
+                >
+                  {savingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Retire Device Confirmation Modal */}
+      {retiringDevice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+            <div className="flex items-center gap-3 text-rose-400 mb-3">
+              <AlertTriangle className="w-6 h-6" />
+              <h3 className="text-base font-bold text-white">Retire Hardware from Fleet</h3>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Are you sure you want to retire <strong>{retiringDevice.manufacturer} {retiringDevice.model}</strong> (S/N: {retiringDevice.serialNumber})?
+              This will decommission the device from active inventory tracking.
+            </p>
+
+            <div className="pt-4 mt-4 border-t border-slate-800 flex justify-end gap-3 text-xs">
+              <button
+                type="button"
+                onClick={() => setRetiringDevice(null)}
+                className="px-4 py-2 rounded-xl text-slate-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRetireDevice}
+                disabled={submittingRetire}
+                className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-bold disabled:opacity-50"
+              >
+                {submittingRetire ? 'Retiring...' : 'Confirm Retire'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Register Device Modal */}
       {isRegisterModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Laptop className="w-5 h-5 text-emerald-400" />
@@ -486,7 +863,7 @@ export default function DevicesPage() {
             <form onSubmit={handleRegisterDevice} className="space-y-4 mt-4">
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Serial Number or IMEI *
+                  Serial Number or Primary IMEI *
                 </label>
                 <input
                   type="text"
@@ -634,7 +1011,7 @@ export default function DevicesPage() {
 
       {/* Remote Command Modal */}
       {commandModalOpen && selectedDevice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in">
           <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
@@ -727,7 +1104,7 @@ export default function DevicesPage() {
 
       {/* Provisioning Modal (Android Enterprise QR Code / Apple MDM profile) */}
       {provisioningDevice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in">
           <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">

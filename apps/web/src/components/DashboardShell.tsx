@@ -25,7 +25,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   Info,
-  X
+  X,
+  Menu
 } from 'lucide-react';
 
 interface UserInfo {
@@ -49,6 +50,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const router = useRouter();
   const [user, setUser] = useState<UserInfo | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Close mobile sidebar on route transition
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
 
   // Notification Drawer State
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -191,21 +198,44 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
   return (
     <div className="min-h-screen bg-navy-950 text-slate-100 flex">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-slate-800/80 bg-navy-900/90 flex flex-col fixed inset-y-0 z-30">
-        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="font-bold text-base tracking-tight text-white flex items-center gap-1.5">
-              HatLock
-              <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                PRO
-              </span>
+      {/* Mobile Drawer Backdrop */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-navy-950/80 backdrop-blur-sm z-40 lg:hidden animate-fade-in"
+          onClick={() => setIsMobileMenuOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar (Responsive drawer on mobile, fixed left on lg+) */}
+      <aside
+        className={`w-64 border-r border-slate-800/80 bg-navy-900/95 lg:bg-navy-900/90 flex flex-col fixed inset-y-0 z-50 transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+              <ShieldCheck className="w-5 h-5" />
             </div>
-            <div className="text-[11px] text-slate-400">by Luxeenet</div>
+            <div>
+              <div className="font-bold text-base tracking-tight text-white flex items-center gap-1.5">
+                HatLock
+                <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  PRO
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-400">by Luxeenet</div>
+            </div>
           </div>
+          {/* Close button for mobile */}
+          <button
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+            aria-label="Close menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Navigation Links */}
@@ -220,6 +250,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => setIsMobileMenuOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                   isActive
                     ? 'bg-emerald-500/10 text-white font-medium border border-emerald-500/20'
@@ -243,6 +274,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={() => setIsMobileMenuOpen(false)}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                     isActive
                       ? 'bg-emerald-500/10 text-white font-medium border border-emerald-500/20'
@@ -256,22 +288,26 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             })}
           </div>
 
-          <div className="pt-3 mt-3 border-t border-slate-800/80">
-            <div className="px-3 pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-              Governance
+          {/* Only display Super-Admin for SUPER_ADMIN role */}
+          {user?.role === 'SUPER_ADMIN' && (
+            <div className="pt-3 mt-3 border-t border-slate-800/80">
+              <div className="px-3 pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                Governance
+              </div>
+              <Link
+                href="/super-admin"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                  pathname === '/super-admin'
+                    ? 'bg-yellow-500/10 text-white font-medium border border-yellow-500/20'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <ShieldAlert className="w-4 h-4 text-yellow-400" />
+                <span>Super-Admin</span>
+              </Link>
             </div>
-            <Link
-              href="/super-admin"
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                pathname === '/super-admin'
-                  ? 'bg-yellow-500/10 text-white font-medium border border-yellow-500/20'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              <ShieldAlert className="w-4 h-4 text-yellow-400" />
-              <span>Super-Admin</span>
-            </Link>
-          </div>
+          )}
         </nav>
 
         {/* Bottom user badge with direct link to profile */}
@@ -279,6 +315,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           <div className="flex items-center justify-between">
             <Link
               href="/profile"
+              onClick={() => setIsMobileMenuOpen(false)}
               title="Manage Profile & Settings"
               className="flex items-center gap-2.5 truncate hover:bg-slate-800/50 p-1.5 rounded-xl transition-all flex-1 mr-1"
             >
@@ -308,26 +345,35 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 ml-64 flex flex-col min-h-screen">
+      <div className="flex-1 lg:ml-64 flex flex-col min-h-screen min-w-0">
         {/* Top Bar */}
-        <header className="h-16 border-b border-slate-800/80 bg-navy-900/60 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between px-8">
-          <div className="flex items-center gap-4">
-            <div className="text-xs font-medium text-slate-400">
+        <header className="h-16 border-b border-slate-800/80 bg-navy-900/60 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3 sm:gap-4">
+            {/* Mobile Hamburger Button */}
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="lg:hidden p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 border border-slate-800 transition-colors"
+              aria-label="Toggle Navigation Menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+
+            <div className="text-xs font-medium text-slate-400 hidden sm:block">
               Current Location: <span className="text-slate-200">Main Headquarters</span>
             </div>
             {user?.email && (
               <Link
                 href="/profile"
-                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+                className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors truncate max-w-[200px]"
               >
-                <UserCheck className="w-3 h-3" />
-                {user.email}
+                <UserCheck className="w-3 h-3 shrink-0" />
+                <span className="truncate">{user.email}</span>
               </Link>
             )}
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <div className="hidden sm:flex items-center gap-2 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               Hardware Watchdog Online
             </div>
@@ -461,7 +507,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         </header>
 
         {/* Page Body */}
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0 max-w-full">
           {children}
         </main>
       </div>
