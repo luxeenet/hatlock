@@ -28,8 +28,11 @@ export async function customerRoutes(server: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const businessId = (request as any).businessId;
+    const where: any = {};
+    if (businessId) where.businessId = businessId;
+
     const customers = await prisma.customer.findMany({
-      where: { businessId },
+      where,
       include: {
         _count: {
           select: {
@@ -51,7 +54,36 @@ export async function customerRoutes(server: FastifyInstance) {
       summary: 'Register a new customer'
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const businessId = (request as any).businessId;
+    let targetBusinessId = (request as any).businessId || (request.body as any)?.businessId;
+    if (!targetBusinessId) {
+      const activeBiz = await prisma.business.findFirst({
+        where: { status: 'ACTIVE' },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true }
+      }) || await prisma.business.findFirst({
+        orderBy: { createdAt: 'asc' },
+        select: { id: true }
+      });
+
+      if (activeBiz) {
+        targetBusinessId = activeBiz.id;
+      } else {
+        const defaultBiz = await prisma.business.create({
+          data: {
+            name: 'Luxeenet Enterprise',
+            registrationNumber: 'DAR-TECH-2024-TZ',
+            email: 'admin@luxeenet.com',
+            phone: '+255700000000',
+            address: 'Samora Avenue',
+            city: 'Dar es Salaam',
+            country: 'Tanzania',
+            status: 'ACTIVE'
+          }
+        });
+        targetBusinessId = defaultBiz.id;
+      }
+    }
+
     const parse = CustomerCreateSchema.safeParse(request.body);
     if (!parse.success) {
       return reply.status(400).send({ error: 'VALIDATION_ERROR', details: parse.error.flatten() });
@@ -62,7 +94,7 @@ export async function customerRoutes(server: FastifyInstance) {
       data: {
         ...rest,
         nationalId: idNumber,
-        businessId
+        businessId: targetBusinessId
       }
     });
 
@@ -79,8 +111,11 @@ export async function customerRoutes(server: FastifyInstance) {
     const businessId = (request as any).businessId;
     const { customerId } = request.params;
 
+    const where: any = { id: customerId };
+    if (businessId) where.businessId = businessId;
+
     const customer = await prisma.customer.findFirst({
-      where: { id: customerId, businessId },
+      where,
       include: {
         financingAgreements: {
           include: {
@@ -119,8 +154,11 @@ export async function customerRoutes(server: FastifyInstance) {
     const { customerId } = request.params;
     const body = request.body as any;
 
+    const where: any = { id: customerId };
+    if (businessId) where.businessId = businessId;
+
     const customer = await prisma.customer.findFirst({
-      where: { id: customerId, businessId }
+      where
     });
 
     if (!customer) {

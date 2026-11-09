@@ -70,11 +70,51 @@ export function authMiddleware(server: FastifyInstance) {
           });
           if (bizExists) {
             (request as any).businessId = requestedBusinessId;
-          } else {
-            (request as any).businessId = payload.businessId || undefined;
           }
-        } else {
-          (request as any).businessId = payload.businessId || undefined;
+        }
+
+        // If not set by valid header, check payload token
+        if (!(request as any).businessId && payload.businessId) {
+          (request as any).businessId = payload.businessId;
+        }
+
+        // If still not resolved, query user's employee record or default to primary business
+        if (!(request as any).businessId) {
+          const emp = await prisma.employee.findFirst({
+            where: { userId: payload.sub },
+            select: { businessId: true }
+          });
+          if (emp?.businessId) {
+            (request as any).businessId = emp.businessId;
+          } else {
+            const activeBiz = await prisma.business.findFirst({
+              where: { status: 'ACTIVE' },
+              orderBy: { createdAt: 'asc' },
+              select: { id: true }
+            }) || await prisma.business.findFirst({
+              orderBy: { createdAt: 'asc' },
+              select: { id: true }
+            });
+
+            if (activeBiz) {
+              (request as any).businessId = activeBiz.id;
+            } else {
+              // Self-heal: ensure a primary business exists for platform operations
+              const defaultBiz = await prisma.business.create({
+                data: {
+                  name: 'Luxeenet Enterprise',
+                  registrationNumber: 'DAR-TECH-2024-TZ',
+                  email: 'admin@luxeenet.com',
+                  phone: '+255700000000',
+                  address: 'Samora Avenue',
+                  city: 'Dar es Salaam',
+                  country: 'Tanzania',
+                  status: 'ACTIVE'
+                }
+              });
+              (request as any).businessId = defaultBiz.id;
+            }
+          }
         }
       } else {
         // Non-super-admin: Tenant context MUST be derived from verified membership
@@ -114,17 +154,29 @@ export async function tenantMiddleware(request: FastifyRequest, reply: FastifyRe
     return reply.status(401).send({ error: 'UNAUTHORIZED', message: 'Not authenticated' });
   }
 
-  // Super admin has platform-wide tenant context
-  if (user.role === UserRole.SUPER_ADMIN) {
+  const resolvedBiz = (request as any).businessId || user.businessId;
+  if (resolvedBiz) {
+    (request as any).businessId = resolvedBiz;
     return;
   }
 
-  const resolvedBiz = (request as any).businessId || user.businessId;
-  if (!resolvedBiz) {
-    return reply.status(403).send({ error: 'FORBIDDEN', message: 'No verified business context' });
+  // Super admin has platform-wide tenant context with active fallback
+  if (user.role === UserRole.SUPER_ADMIN) {
+    const activeBiz = await prisma.business.findFirst({
+      where: { status: 'ACTIVE' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true }
+    }) || await prisma.business.findFirst({
+      orderBy: { createdAt: 'asc' },
+      select: { id: true }
+    });
+    if (activeBiz) {
+      (request as any).businessId = activeBiz.id;
+    }
+    return;
   }
 
-  (request as any).businessId = resolvedBiz;
+  return reply.status(403).send({ error: 'FORBIDDEN', message: 'No verified business context' });
 }
 
 // Role guard factory

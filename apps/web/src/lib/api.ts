@@ -6,7 +6,20 @@ export const API_BASE = process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV
 function getAuthHeader(): Record<string, string> {
   if (typeof window === 'undefined') return {};
   const token = localStorage.getItem('hatlock_token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  try {
+    const storedUser = localStorage.getItem('hatlock_user');
+    if (storedUser) {
+      const parsed = JSON.parse(storedUser);
+      if (parsed.businessId) {
+        headers['x-business-id'] = parsed.businessId;
+      }
+    }
+  } catch {}
+
+  return headers;
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {

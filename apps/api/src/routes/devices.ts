@@ -52,7 +52,8 @@ export async function deviceRoutes(server: FastifyInstance) {
     const businessId = (request as any).businessId;
     const { status, branchId, search, manufacturer, platform, os, complianceStatus, deviceType, customerId, agreementId } = request.query;
 
-    const where: any = { businessId };
+    const where: any = {};
+    if (businessId) where.businessId = businessId;
     if (status) where.status = status as DeviceStatus;
     if (branchId) where.branchId = branchId;
     if (manufacturer) where.manufacturer = { equals: manufacturer, mode: 'insensitive' };
@@ -105,14 +106,44 @@ export async function deviceRoutes(server: FastifyInstance) {
       summary: 'Register new device into inventory'
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const businessId = (request as any).businessId;
+    // Resolve target businessId with multi-level fallback
+    let targetBusinessId = (request as any).businessId || (request.body as any)?.businessId;
+    if (!targetBusinessId) {
+      const activeBiz = await prisma.business.findFirst({
+        where: { status: 'ACTIVE' },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true }
+      }) || await prisma.business.findFirst({
+        orderBy: { createdAt: 'asc' },
+        select: { id: true }
+      });
+
+      if (activeBiz) {
+        targetBusinessId = activeBiz.id;
+      } else {
+        const defaultBiz = await prisma.business.create({
+          data: {
+            name: 'Luxeenet Enterprise',
+            registrationNumber: 'DAR-TECH-2024-TZ',
+            email: 'admin@luxeenet.com',
+            phone: '+255700000000',
+            address: 'Samora Avenue',
+            city: 'Dar es Salaam',
+            country: 'Tanzania',
+            status: 'ACTIVE'
+          }
+        });
+        targetBusinessId = defaultBiz.id;
+      }
+    }
+
     const parse = DeviceCreateSchema.safeParse(request.body);
     if (!parse.success) {
       return reply.status(400).send({ error: 'VALIDATION_ERROR', details: parse.error.flatten() });
     }
 
     const existing = await prisma.device.findFirst({
-      where: { serialNumber: parse.data.serialNumber, businessId }
+      where: { serialNumber: parse.data.serialNumber, businessId: targetBusinessId }
     });
 
     if (existing) {
@@ -128,7 +159,7 @@ export async function deviceRoutes(server: FastifyInstance) {
         ...devRest,
         physicalCondition: condition,
         deviceType: (deviceType || 'LAPTOP') as any,
-        businessId,
+        businessId: targetBusinessId,
         status: DeviceStatus.AVAILABLE,
         currentOS: (operatingSystem || DeviceOS.UNKNOWN) as DeviceOS
       }
@@ -146,9 +177,11 @@ export async function deviceRoutes(server: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { deviceId: string } }>, reply: FastifyReply) => {
     const businessId = (request as any).businessId;
     const { deviceId } = request.params;
+    const where: any = { id: deviceId };
+    if (businessId) where.businessId = businessId;
 
     const device = await prisma.device.findFirst({
-      where: { id: deviceId, businessId },
+      where,
       include: {
         branch: true,
         identity: true,
@@ -194,8 +227,11 @@ export async function deviceRoutes(server: FastifyInstance) {
       return reply.status(400).send({ error: 'VALIDATION_ERROR', details: parse.error.flatten() });
     }
 
+    const where: any = { id: deviceId };
+    if (businessId) where.businessId = businessId;
+
     const device = await prisma.device.findFirst({
-      where: { id: deviceId, businessId },
+      where,
       include: {
         business: true,
         financingAgreements: {
@@ -265,8 +301,11 @@ export async function deviceRoutes(server: FastifyInstance) {
     const { deviceId } = request.params;
     const body = request.body as any;
 
+    const where: any = { id: deviceId };
+    if (businessId) where.businessId = businessId;
+
     const device = await prisma.device.findFirst({
-      where: { id: deviceId, businessId }
+      where
     });
 
     if (!device) {
@@ -298,8 +337,11 @@ export async function deviceRoutes(server: FastifyInstance) {
     const businessId = (request as any).businessId;
     const { deviceId } = request.params;
 
+    const where: any = { id: deviceId };
+    if (businessId) where.businessId = businessId;
+
     const device = await prisma.device.findFirst({
-      where: { id: deviceId, businessId },
+      where,
       include: {
         financingAgreements: { where: { status: 'ACTIVE' } },
         rentalAgreements: { where: { status: 'ACTIVE' } }

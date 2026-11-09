@@ -248,7 +248,18 @@ export async function authRoutes(server: FastifyInstance) {
       }
     }
 
-    const businessId = user.employee?.businessId;
+    let businessId = user.employee?.businessId;
+    if (!businessId && user.role === UserRole.SUPER_ADMIN) {
+      const activeBiz = await prisma.business.findFirst({
+        where: { status: 'ACTIVE' },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true }
+      }) || await prisma.business.findFirst({
+        orderBy: { createdAt: 'asc' },
+        select: { id: true }
+      });
+      businessId = activeBiz?.id;
+    }
 
     // Update last login
     await prisma.user.update({
@@ -269,7 +280,7 @@ export async function authRoutes(server: FastifyInstance) {
     const tokens = await generateTokens(server, user.id, user.role, businessId);
 
     return reply.send({
-      user: { id: user.id, email: user.email, role: user.role, mfaEnabled: user.mfaEnabled },
+      user: { id: user.id, email: user.email, role: user.role, mfaEnabled: user.mfaEnabled, businessId },
       businessId,
       ...tokens
     });
