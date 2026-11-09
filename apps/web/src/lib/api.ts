@@ -575,6 +575,23 @@ export const apiReports = {
 };
 
 // ----------------------------------------------------------------------------
+// MDM & Provisioning
+// ----------------------------------------------------------------------------
+export interface AndroidProvisioningProfile {
+  deviceId: string;
+  format: string;
+  qrJson: Record<string, any>;
+  qrDataUrl?: string;
+  qrImageUrl?: string;
+  packageDownloadUrl?: string;
+}
+
+export const apiMdm = {
+  getAndroidProvisioningProfile: (deviceId: string) =>
+    request<AndroidProvisioningProfile>(`/mdm/android/provisioning-profile/${deviceId}`)
+};
+
+// ----------------------------------------------------------------------------
 // Auth & Profile
 // ----------------------------------------------------------------------------
 export interface UserProfile {

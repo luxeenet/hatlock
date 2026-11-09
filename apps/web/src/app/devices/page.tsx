@@ -30,9 +30,11 @@ import {
   Clock,
   Wifi,
   WifiOff,
-  User
+  User,
+  Copy,
+  Check
 } from 'lucide-react';
-import { apiDevices, Device } from '../../lib/api';
+import { apiDevices, Device, apiMdm, AndroidProvisioningProfile, API_BASE } from '../../lib/api';
 
 export default function DevicesPage() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -89,6 +91,34 @@ export default function DevicesPage() {
 
   // Provisioning Modal (Android Enterprise QR / Apple MDM profile)
   const [provisioningDevice, setProvisioningDevice] = useState<Device | null>(null);
+  const [provisioningProfile, setProvisioningProfile] = useState<AndroidProvisioningProfile | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [copiedPayload, setCopiedPayload] = useState(false);
+
+  // Fetch Android Enterprise QR code & provisioning profile on modal open
+  useEffect(() => {
+    if (!provisioningDevice || provisioningDevice.currentOS !== 'ANDROID') {
+      setProvisioningProfile(null);
+      return;
+    }
+
+    let isMounted = true;
+    setLoadingProfile(true);
+    apiMdm.getAndroidProvisioningProfile(provisioningDevice.id)
+      .then(profile => {
+        if (isMounted) setProvisioningProfile(profile);
+      })
+      .catch(err => {
+        console.warn('Failed to load Android provisioning profile:', err);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingProfile(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [provisioningDevice]);
 
   const loadDevices = async () => {
     setLoading(true);
@@ -1130,17 +1160,86 @@ export default function DevicesPage() {
               </div>
 
               {provisioningDevice.currentOS === 'ANDROID' ? (
-                <div className="space-y-3">
-                  <p className="text-slate-300">
+                <div className="space-y-4">
+                  <div className="text-slate-300 leading-relaxed">
                     To provision this Android smartphone as a <strong>Fully Managed Device Owner</strong>:
-                  </p>
-                  <ol className="list-decimal pl-4 space-y-1.5 text-slate-400">
-                    <li>Factory reset or unbox the device.</li>
-                    <li>Tap the &quot;Welcome&quot; setup screen 6 times to open QR setup.</li>
-                    <li>Connect Wi-Fi and scan the HatLock Device Owner QR code.</li>
-                  </ol>
-                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 font-mono text-[11px] text-cyan-300 overflow-x-auto">
-                    GET /api/v1/mdm/android/provisioning-profile/{provisioningDevice.id}
+                  </div>
+
+                  {/* Scannable Android Enterprise QR Code Container */}
+                  <div className="flex flex-col items-center justify-center p-4 bg-slate-950 rounded-2xl border border-slate-800">
+                    <div className="p-3 bg-white rounded-xl shadow-md border border-slate-200 flex items-center justify-center min-w-[210px] min-h-[210px]">
+                      {loadingProfile ? (
+                        <div className="flex flex-col items-center justify-center p-8 text-slate-800">
+                          <RefreshCw className="w-8 h-8 animate-spin text-emerald-600 mb-2" />
+                          <span className="text-xs font-semibold text-slate-600">Generating QR...</span>
+                        </div>
+                      ) : (
+                        <img
+                          src={provisioningProfile?.qrDataUrl || `${API_BASE}/api/v1/mdm/android/provisioning-qr/${provisioningDevice.id}`}
+                          alt={`HatLock Device Owner QR Code for ${provisioningDevice.manufacturer} ${provisioningDevice.model}`}
+                          className="w-48 h-48 sm:w-52 sm:h-52 object-contain"
+                        />
+                      )}
+                    </div>
+                    <div className="text-[11px] text-slate-400 font-medium mt-2.5 flex items-center gap-1.5 text-center">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Point phone camera at this QR code during setup</span>
+                    </div>
+                  </div>
+
+                  {/* Step-by-step instructions */}
+                  <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800/80 space-y-1.5 text-slate-300">
+                    <div className="font-semibold text-slate-200 text-xs">Setup Instructions:</div>
+                    <ol className="list-decimal pl-4 space-y-1 text-slate-400 text-[11px] leading-relaxed">
+                      <li>Factory reset or unbox the Samsung device.</li>
+                      <li>On the initial <strong>&quot;Welcome&quot;</strong> screen, tap any blank area <strong>6 times</strong> to open QR setup.</li>
+                      <li>Connect to Wi-Fi, then scan the QR code above.</li>
+                      <li>The HatLock Enterprise Device Owner agent will auto-install and bind.</li>
+                    </ol>
+                  </div>
+
+                  {/* Actions & Raw JSON toggle */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <a
+                      href={`${API_BASE}/api/v1/mdm/android/provisioning-qr/${provisioningDevice.id}`}
+                      download={`hatlock-provisioning-${provisioningDevice.serialNumber}.png`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium flex items-center justify-center gap-1.5 text-xs transition-colors border border-slate-700"
+                    >
+                      <Download className="w-3.5 h-3.5 text-emerald-400" />
+                      Download QR
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const payload = provisioningProfile?.qrJson || {
+                          deviceId: provisioningDevice.id,
+                          serialNumber: provisioningDevice.serialNumber
+                        };
+                        navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+                        setCopiedPayload(true);
+                        setTimeout(() => setCopiedPayload(false), 3000);
+                      }}
+                      className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium flex items-center justify-center gap-1.5 text-xs transition-colors border border-slate-700"
+                    >
+                      {copiedPayload ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Copied Payload</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Copy Setup JSON</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="p-2 bg-slate-950 rounded-lg border border-slate-800 font-mono text-[10px] text-slate-500 truncate">
+                    Endpoint: /api/v1/mdm/android/provisioning-profile/{provisioningDevice.id}
                   </div>
                 </div>
               ) : (

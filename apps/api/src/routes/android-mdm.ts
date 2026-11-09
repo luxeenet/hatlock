@@ -9,6 +9,7 @@ import { DeviceOS, DeviceStatus, CommandType, CommandStatus } from '@prisma/clie
 import { logger } from '../lib/logger.js';
 import { auditLog } from '../services/audit.js';
 import { AuditAction } from '@prisma/client';
+import QRCode from 'qrcode';
 
 const AndroidEnrollSchema = z.object({
   deviceId: z.string().uuid(),
@@ -92,11 +93,92 @@ export async function androidMdmRoutes(server: FastifyInstance) {
       }
     };
 
+    // Generate base64 Data URL for QR Code
+    const qrString = JSON.stringify(provisioningPayload);
+    const qrDataUrl = await QRCode.toDataURL(qrString, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 480,
+      color: {
+        dark: '#000000',
+        light: '#ffffff'
+      }
+    });
+
     return reply.send({
       deviceId: device.id,
       format: 'ANDROID_ENTERPRISE_QR',
-      qrJson: provisioningPayload
+      qrJson: provisioningPayload,
+      qrDataUrl,
+      qrImageUrl: `/api/v1/mdm/android/provisioning-qr/${device.id}`
     });
+  });
+
+  // Direct PNG stream of Android Enterprise QR Code for image tags & downloads
+  server.get('/provisioning-qr/:deviceId', {
+    schema: {
+      tags: ['Android Enterprise'],
+      summary: 'Direct PNG stream of Android Enterprise QR Code'
+    }
+  }, async (request: FastifyRequest<{ Params: { deviceId: string } }>, reply: FastifyReply) => {
+    const { deviceId } = request.params;
+
+    const device = await prisma.device.findUnique({
+      where: { id: deviceId },
+      include: {
+        business: { select: { id: true, name: true, phone: true } },
+        financingAgreements: {
+          where: { status: { in: ['ACTIVE', 'PAYMENT_DUE', 'GRACE_PERIOD', 'RESTRICTED'] } },
+          select: { agreementNumber: true }
+        },
+        rentalAgreements: {
+          where: { status: { in: ['ACTIVE', 'PAYMENT_DUE', 'GRACE_PERIOD', 'RESTRICTED'] } },
+          select: { agreementNumber: true }
+        }
+      }
+    });
+
+    if (!device) {
+      return reply.status(404).send({ error: 'DEVICE_NOT_FOUND' });
+    }
+
+    const agreementNumber =
+      device.financingAgreements[0]?.agreementNumber ||
+      device.rentalAgreements[0]?.agreementNumber ||
+      'HATLOCK-FINANCED';
+
+    const provisioningPayload = {
+      'android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME': 'com.luxeenet.hatlock.mdm/.HatLockDeviceAdminReceiver',
+      'android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION': `${env.API_BASE_URL}/downloads/android/HatLockEnterpriseAgent.apk`,
+      'android.app.extra.PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM': '4b4923e1074a3f87a8b3834927b2b005e839e94bc1721b0632a4bf74b01140ec',
+      'android.app.extra.PROVISIONING_LEAVE_ALL_SYSTEM_APPS_ENABLED': true,
+      'android.app.extra.PROVISIONING_SKIP_ENCRYPTION': false,
+      'android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE': {
+        apiUrl: env.API_BASE_URL,
+        deviceId: device.id,
+        businessId: device.businessId,
+        businessName: device.business?.name || 'HatLock Financed Device',
+        businessContact: device.business?.phone || '+255700000000',
+        agreementNumber,
+        enforceFactoryResetProtection: true,
+        enforceKioskRestrictionsOnLock: true,
+        heartbeatIntervalSeconds: 300
+      }
+    };
+
+    const buffer = await QRCode.toBuffer(JSON.stringify(provisioningPayload), {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 512,
+      color: {
+        dark: '#000000',
+        light: '#ffffff'
+      }
+    });
+
+    reply.header('Content-Type', 'image/png');
+    reply.header('Cache-Control', 'public, max-age=3600');
+    return reply.send(buffer);
   });
 
   // --------------------------------------------------------------------------
