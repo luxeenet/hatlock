@@ -13,6 +13,7 @@ import { prisma } from './lib/prisma.js';
 import { redis } from './lib/redis.js';
 import { env } from './lib/env.js';
 import { logger } from './lib/logger.js';
+import { ensureDatabaseSchema } from './lib/ensure-schema.js';
 
 // Route imports
 import { authRoutes } from './routes/auth.js';
@@ -308,6 +309,9 @@ async function start() {
     // Connect to database
     await prisma.$connect();
     logger.info('Database connected');
+
+    // Ensure database schema alignment (resolves missing Device.deviceType, enums, and tables)
+    await ensureDatabaseSchema(prisma, logger);
 
     // Test Redis connection
     await redis.ping();
