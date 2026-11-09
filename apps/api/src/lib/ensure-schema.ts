@@ -186,3 +186,4 @@ export async function ensureDatabaseSchema(prisma: PrismaClient, log?: LoggerLik
     log?.error({ err: err?.message || err }, 'ensureDatabaseSchema: warning during schema verification');
   }
 }
+
