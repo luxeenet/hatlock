@@ -77,12 +77,41 @@ async function buildServer() {
     crossOriginEmbedderPolicy: false
   });
 
-  // CORS
-  const corsOrigins = env.CORS_ORIGINS.split(',').map(s => s.trim()).filter(Boolean);
+  // CORS configuration — strict allowlist with credentials support
+  const allowedOrigins = [
+    'https://admin.luxeenet.com',
+    'https://portal.luxeenet.com',
+    ...env.CORS_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
+  ];
+  const uniqueOrigins = Array.from(new Set(allowedOrigins));
+
   await server.register(cors, {
-    origin: corsOrigins,
+    origin: (origin, cb) => {
+      // Allow requests with no origin (curl, server-to-server, mobile agents)
+      if (!origin) {
+        return cb(null, true);
+      }
+      if (uniqueOrigins.includes(origin)) {
+        return cb(null, true);
+      }
+      return cb(null, false);
+    },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-business-id',
+      'x-customer-phone',
+      'x-requested-with',
+      'Accept',
+      'Origin',
+      'Range'
+    ],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    maxAge: 86400,
+    preflightContinue: false,
+    optionsSuccessStatus: 204
   });
 
   // Health check endpoint (production probe - checks both PostgreSQL & Redis)
@@ -230,6 +259,21 @@ async function buildServer() {
 
   // Error handler
   server.setErrorHandler((error: any, request, reply) => {
+    // Guarantee CORS headers are present on error responses for allowed origins
+    const origin = request.headers.origin;
+    if (origin && uniqueOrigins.includes(origin)) {
+      reply.header('Access-Control-Allow-Origin', origin);
+      reply.header('Access-Control-Allow-Credentials', 'true');
+    }
+
+    if (error.name === 'ZodError' || error.issues) {
+      return reply.status(400).send({
+        error: 'VALIDATION_ERROR',
+        message: 'Request payload validation failed',
+        details: error.issues || error.flatten?.()
+      });
+    }
+
     if (error.validation) {
       return reply.status(400).send({
         error: 'VALIDATION_ERROR',

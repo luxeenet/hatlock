@@ -205,18 +205,21 @@ export async function authRoutes(server: FastifyInstance) {
     }
   }, async (request, reply) => {
     const body = loginSchema.parse(request.body);
+    const cleanEmail = body.email.trim().toLowerCase();
 
-    const user = await prisma.user.findUnique({
-      where: { email: body.email },
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: cleanEmail, mode: 'insensitive' } },
       include: { employee: { select: { businessId: true } } }
     });
 
     if (!user || !user.isActive) {
+      server.log.warn({ email: cleanEmail }, 'Login attempt: user not found or inactive');
       return reply.status(401).send({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password' });
     }
 
     const passwordValid = await bcrypt.compare(body.password, user.passwordHash);
     if (!passwordValid) {
+      server.log.warn({ userId: user.id, email: cleanEmail }, 'Login attempt: invalid password');
       // Log failed attempt
       await auditLog({
         actorId: user.id,
