@@ -27,7 +27,9 @@ import {
   Info,
   X,
   Menu,
-  Search
+  Search,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
 interface UserInfo {
@@ -175,6 +177,42 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Fullscreen State and Toggle Handler
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    try {
+      if (!document.fullscreenElement) {
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen();
+        } else if ((document.documentElement as any).webkitRequestFullscreen) {
+          (document.documentElement as any).webkitRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          (document as any).webkitExitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.warn('Fullscreen request failed:', err);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('hatlock_token');
@@ -509,6 +547,21 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               Hardware Watchdog Active
             </div>
+
+            {/* Fullscreen Toggle */}
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/60 border border-transparent hover:border-slate-700/60 transition-colors"
+              title={isFullscreen ? 'Exit Full Screen' : 'Full Screen'}
+              aria-label="Toggle Full Screen"
+            >
+              {isFullscreen ? (
+                <Minimize2 className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <Maximize2 className="w-4 h-4" />
+              )}
+            </button>
 
             {/* Notification Bell with Dropdown */}
             <div className="relative" ref={notifRef}>

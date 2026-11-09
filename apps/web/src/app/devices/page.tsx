@@ -1134,55 +1134,61 @@ export default function DevicesPage() {
 
       {/* Provisioning Modal (Android Enterprise QR Code / Apple MDM profile) */}
       {provisioningDevice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <QrCode className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-base font-bold text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in overflow-hidden">
+          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-lg max-h-[92vh] flex flex-col shadow-2xl overflow-hidden relative">
+            {/* Modal Header - Pinned at top */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 shrink-0 bg-navy-950/50">
+              <div className="flex items-center gap-2 min-w-0">
+                <QrCode className="w-5 h-5 text-indigo-400 shrink-0" />
+                <h3 className="text-sm sm:text-base font-bold text-white truncate">
                   {provisioningDevice.currentOS === 'ANDROID' ? 'Android Enterprise Provisioning' : 'Apple MDM Enrollment'}
                 </h3>
               </div>
               <button
                 onClick={() => setProvisioningDevice(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800/60 transition-colors shrink-0 ml-2"
+                title="Close"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4 mt-4 text-xs">
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                <div className="text-slate-400">Target Device:</div>
-                <div className="font-semibold text-white mt-0.5">
-                  {provisioningDevice.manufacturer} {provisioningDevice.model} (S/N: {provisioningDevice.serialNumber})
+            {/* Modal Body - Scrollable so it never overflows offscreen */}
+            <div className="overflow-y-auto px-5 py-4 space-y-3.5 text-xs flex-1 min-h-0">
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800/80">
+                <div className="text-[11px] text-slate-400">Target Device:</div>
+                <div className="font-semibold text-white mt-0.5 truncate">
+                  {provisioningDevice.manufacturer} {provisioningDevice.model}{' '}
+                  <span className="text-slate-400 font-mono text-[11px] font-normal">
+                    (S/N: {provisioningDevice.serialNumber})
+                  </span>
                 </div>
               </div>
 
               {provisioningDevice.currentOS === 'ANDROID' ? (
-                <div className="space-y-4">
-                  <div className="text-slate-300 leading-relaxed">
-                    To provision this Android smartphone as a <strong>Fully Managed Device Owner</strong>:
+                <div className="space-y-3.5">
+                  <div className="text-slate-300 leading-relaxed text-[11.5px]">
+                    To provision this Android smartphone as a <strong className="text-white">Fully Managed Device Owner</strong>:
                   </div>
 
                   {/* Scannable Android Enterprise QR Code Container */}
-                  <div className="flex flex-col items-center justify-center p-4 bg-slate-950 rounded-2xl border border-slate-800">
-                    <div className="p-3 bg-white rounded-xl shadow-md border border-slate-200 flex items-center justify-center min-w-[210px] min-h-[210px]">
+                  <div className="flex flex-col items-center justify-center p-3.5 bg-slate-950 rounded-2xl border border-slate-800">
+                    <div className="p-2.5 bg-white rounded-xl shadow-md border border-slate-200 flex items-center justify-center">
                       {loadingProfile ? (
-                        <div className="flex flex-col items-center justify-center p-8 text-slate-800">
-                          <RefreshCw className="w-8 h-8 animate-spin text-emerald-600 mb-2" />
+                        <div className="flex flex-col items-center justify-center p-6 text-slate-800">
+                          <RefreshCw className="w-7 h-7 animate-spin text-emerald-600 mb-2" />
                           <span className="text-xs font-semibold text-slate-600">Generating QR...</span>
                         </div>
                       ) : (
                         <img
                           src={provisioningProfile?.qrDataUrl || `${API_BASE}/api/v1/mdm/android/provisioning-qr/${provisioningDevice.id}`}
                           alt={`HatLock Device Owner QR Code for ${provisioningDevice.manufacturer} ${provisioningDevice.model}`}
-                          className="w-48 h-48 sm:w-52 sm:h-52 object-contain"
+                          className="w-36 h-36 sm:w-44 sm:h-44 object-contain"
                         />
                       )}
                     </div>
-                    <div className="text-[11px] text-slate-400 font-medium mt-2.5 flex items-center gap-1.5 text-center">
-                      <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <div className="text-[11px] text-slate-400 font-medium mt-2 flex items-center gap-1.5 text-center">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                       <span>Point phone camera at this QR code during setup</span>
                     </div>
                   </div>
@@ -1196,46 +1202,6 @@ export default function DevicesPage() {
                       <li>Connect to Wi-Fi, then scan the QR code above.</li>
                       <li>The HatLock Enterprise Device Owner agent will auto-install and bind.</li>
                     </ol>
-                  </div>
-
-                  {/* Actions & Raw JSON toggle */}
-                  <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <a
-                      href={`${API_BASE}/api/v1/mdm/android/provisioning-qr/${provisioningDevice.id}`}
-                      download={`hatlock-provisioning-${provisioningDevice.serialNumber}.png`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium flex items-center justify-center gap-1.5 text-xs transition-colors border border-slate-700"
-                    >
-                      <Download className="w-3.5 h-3.5 text-emerald-400" />
-                      Download QR
-                    </a>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const payload = provisioningProfile?.qrJson || {
-                          deviceId: provisioningDevice.id,
-                          serialNumber: provisioningDevice.serialNumber
-                        };
-                        navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-                        setCopiedPayload(true);
-                        setTimeout(() => setCopiedPayload(false), 3000);
-                      }}
-                      className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium flex items-center justify-center gap-1.5 text-xs transition-colors border border-slate-700"
-                    >
-                      {copiedPayload ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Copied Payload</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>Copy Setup JSON</span>
-                        </>
-                      )}
-                    </button>
                   </div>
 
                   <div className="p-2 bg-slate-950 rounded-lg border border-slate-800 font-mono text-[10px] text-slate-500 truncate">
@@ -1257,16 +1223,70 @@ export default function DevicesPage() {
                   </a>
                 </div>
               )}
+            </div>
 
-              <div className="pt-3 border-t border-slate-800 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setProvisioningDevice(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
-                >
-                  Close
-                </button>
-              </div>
+            {/* Modal Bottom Action Buttons - Pinned at bottom, always visible */}
+            <div className="px-5 py-3 border-t border-slate-800 bg-navy-950/90 shrink-0 flex items-center justify-between gap-2">
+              {provisioningDevice.currentOS === 'ANDROID' ? (
+                <>
+                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-1 min-w-0">
+                    <a
+                      href={`${API_BASE}/api/v1/mdm/android/provisioning-qr/${provisioningDevice.id}`}
+                      download={`hatlock-provisioning-${provisioningDevice.serialNumber}.png`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium flex items-center justify-center gap-1.5 text-xs transition-colors border border-slate-700 shrink-0"
+                    >
+                      <Download className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Download QR</span>
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const payload = provisioningProfile?.qrJson || {
+                          deviceId: provisioningDevice.id,
+                          serialNumber: provisioningDevice.serialNumber
+                        };
+                        navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+                        setCopiedPayload(true);
+                        setTimeout(() => setCopiedPayload(false), 3000);
+                      }}
+                      className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium flex items-center justify-center gap-1.5 text-xs transition-colors border border-slate-700 shrink-0"
+                    >
+                      {copiedPayload ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Copy Setup JSON</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setProvisioningDevice(null)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold shrink-0"
+                  >
+                    Close
+                  </button>
+                </>
+              ) : (
+                <div className="flex justify-end w-full">
+                  <button
+                    type="button"
+                    onClick={() => setProvisioningDevice(null)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
