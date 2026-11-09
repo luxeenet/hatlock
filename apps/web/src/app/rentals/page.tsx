@@ -214,7 +214,7 @@ export default function RentalsPage() {
             return (
               <div
                 key={rental.id}
-                className="glass-panel p-5 sm:p-6 rounded-2xl border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-5 hover:border-purple-500/30 transition-colors"
+                className="metis-card p-5 sm:p-6 rounded-xl border border-slate-800/80 flex flex-col lg:flex-row lg:items-center justify-between gap-5 hover:border-purple-500/30 transition-colors"
               >
                 <div className="space-y-2 flex-1">
                   <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -309,7 +309,7 @@ export default function RentalsPage() {
       {/* View Rental Detail Modal */}
       {detailRentalId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-[#121927] border border-slate-800 rounded-xl w-full max-w-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             {loadingDetail || !rentalDetail ? (
               <div className="p-12 text-center text-slate-400">
                 <div className="w-8 h-8 border-2 border-purple-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -438,7 +438,7 @@ export default function RentalsPage() {
       {/* Create Rental Agreement Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-[#121927] border border-slate-800 rounded-xl w-full max-w-lg p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Repeat className="w-5 h-5 text-purple-400" />

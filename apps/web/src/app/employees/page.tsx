@@ -138,12 +138,12 @@ export default function EmployeesPage() {
 
       {/* Employees Grid */}
       {loading ? (
-        <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 text-slate-400">
+        <div className="metis-card p-12 text-center rounded-xl border border-slate-800 text-slate-400">
           <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           Loading team directory...
         </div>
       ) : employees.length === 0 ? (
-        <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 text-slate-400">
+        <div className="metis-card p-12 text-center rounded-xl border border-slate-800 text-slate-400">
           <Users className="w-12 h-12 text-slate-600 mx-auto mb-3" />
           <div className="text-base font-semibold text-white">No employees registered yet</div>
           <p className="text-xs text-slate-400 mt-1">
@@ -151,11 +151,11 @@ export default function EmployeesPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
           {employees.map(emp => (
             <div
               key={emp.id}
-              className="glass-panel p-6 rounded-2xl border border-slate-800 hover:border-blue-500/40 transition-colors"
+              className="metis-card p-5 sm:p-6 rounded-xl border border-slate-800/80 hover:border-blue-500/40 transition-colors"
             >
               <div className="flex items-start justify-between">
                 <div>
@@ -189,7 +189,7 @@ export default function EmployeesPage() {
       {/* Add Employee Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+          <div className="bg-[#121927] border border-slate-800 rounded-xl w-full max-w-md p-6 shadow-2xl relative">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-blue-400" />

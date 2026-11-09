@@ -76,7 +76,7 @@ export default function AuditLogsPage() {
       )}
 
       {/* Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel p-4 rounded-xl border border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 metis-card p-4 rounded-xl border border-slate-800/80">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
@@ -84,16 +84,16 @@ export default function AuditLogsPage() {
             placeholder="Search by action, resource, or actor..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-900/80 border border-slate-700/80 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-orange-500 transition-colors"
+            className="w-full pl-10 pr-4 py-2 bg-slate-900/90 border border-slate-700/80 rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500 transition-colors"
           />
         </div>
         <div className="text-xs text-slate-400">
-          Total Logged Operations: <strong className="text-white">{logs.length}</strong>
+          Total Logged Operations: <strong className="text-white font-mono">{logs.length}</strong>
         </div>
       </div>
 
       {/* Log Journal */}
-      <div className="glass-panel rounded-2xl border border-slate-800 overflow-hidden">
+      <div className="metis-card rounded-xl border border-slate-800/90 overflow-hidden">
         {loading ? (
           <div className="p-12 text-center text-slate-400">
             <div className="w-8 h-8 border-2 border-orange-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />

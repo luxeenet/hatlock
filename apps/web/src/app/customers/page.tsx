@@ -221,13 +221,13 @@ export default function CustomersPage() {
           <button
             onClick={loadCustomers}
             title="Refresh from PostgreSQL"
-            className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80 transition-colors"
+            className="p-2.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-750 transition-colors shadow-sm"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="px-3.5 sm:px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-navy-950 text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all active:scale-95"
+            className="px-3.5 sm:px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-sm transition-all active:scale-95"
           >
             <Plus className="w-4 h-4" />
             Add Customer
@@ -251,7 +251,7 @@ export default function CustomersPage() {
       )}
 
       {/* Search Bar & Stats */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel p-4 rounded-xl border border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 metis-card p-4 rounded-xl border border-slate-800/80">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
@@ -259,23 +259,23 @@ export default function CustomersPage() {
             placeholder="Search by name, email, phone, or national ID..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-900/80 border border-slate-700/80 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+            className="w-full pl-10 pr-4 py-2 bg-slate-900/90 border border-slate-700/80 rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 transition-colors"
           />
         </div>
         <div className="text-xs text-slate-400 flex items-center gap-4">
           <span>Total Customers: <strong className="text-white">{customers.length}</strong></span>
-          <span>Showing: <strong className="text-amber-400">{filtered.length}</strong></span>
+          <span>Showing: <strong className="text-amber-400 font-mono">{filtered.length}</strong></span>
         </div>
       </div>
 
       {/* Customers Grid */}
       {loading ? (
-        <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 text-slate-400">
+        <div className="metis-card p-12 text-center rounded-xl border border-slate-800 text-slate-400">
           <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <span>Connecting to PostgreSQL and fetching customer records...</span>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="glass-panel p-12 text-center rounded-2xl border border-slate-800 text-slate-400">
+        <div className="metis-card p-12 text-center rounded-xl border border-slate-800 text-slate-400">
           <Users className="w-12 h-12 text-slate-600 mx-auto mb-3" />
           <div className="text-base font-semibold text-white">No customers found</div>
           <p className="text-xs text-slate-400 mt-1">
@@ -291,7 +291,7 @@ export default function CustomersPage() {
               <div
                 key={customer.id}
                 onClick={() => handleOpenDetail(customer.id)}
-                className="glass-panel p-5 sm:p-6 rounded-2xl border border-slate-800 hover:border-amber-500/40 transition-all hover:-translate-y-0.5 cursor-pointer flex flex-col justify-between group"
+                className="metis-card p-5 sm:p-6 rounded-xl border border-slate-800/80 hover:border-amber-500/40 transition-all hover:-translate-y-0.5 cursor-pointer flex flex-col justify-between group"
               >
                 <div className="space-y-4">
                   <div className="flex items-start justify-between">
@@ -382,7 +382,7 @@ export default function CustomersPage() {
       {/* Add Customer Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-[#121927] border border-slate-800 rounded-xl w-full max-w-lg p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-amber-400" />
@@ -525,7 +525,7 @@ export default function CustomersPage() {
       {/* Edit Customer Modal */}
       {isEditModalOpen && editingCustomer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-[#121927] border border-slate-800 rounded-xl w-full max-w-lg p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Edit2 className="w-5 h-5 text-amber-400" />
@@ -641,7 +641,7 @@ export default function CustomersPage() {
       {/* Customer Details & Portfolio Drawer / Modal */}
       {selectedCustomerId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-[#121927] border border-slate-800 rounded-xl w-full max-w-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             {loadingDetail || !customerDetail ? (
               <div className="p-12 text-center text-slate-400">
                 <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />

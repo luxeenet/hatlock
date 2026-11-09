@@ -273,14 +273,14 @@ export default function DevicesPage() {
           <button
             onClick={loadDevices}
             title="Scan & Refresh Devices"
-            className="px-3.5 sm:px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-medium border border-slate-700 flex items-center gap-2 transition-colors"
+            className="px-3.5 sm:px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs sm:text-sm font-medium border border-slate-700/80 flex items-center gap-2 transition-colors shadow-sm"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Scan Devices
           </button>
           <button
             onClick={() => setIsRegisterModalOpen(true)}
-            className="px-3.5 sm:px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-navy-950 text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+            className="px-3.5 sm:px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-sm active:scale-95 transition-all"
           >
             <Plus className="w-4 h-4" />
             Register Device
@@ -303,7 +303,7 @@ export default function DevicesPage() {
       )}
 
       {/* Filter and Search Bar */}
-      <div className="glass-panel p-4 rounded-xl border border-slate-800 space-y-3">
+      <div className="metis-card p-4 rounded-xl border border-slate-800/80 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -312,7 +312,7 @@ export default function DevicesPage() {
               placeholder="Search serial, IMEI, model, brand, or borrower..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-900/80 border border-slate-700/80 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+              className="w-full pl-10 pr-4 py-2 bg-slate-900/90 border border-slate-700/80 rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 transition-colors"
             />
           </div>
 
@@ -323,7 +323,7 @@ export default function DevicesPage() {
                 onClick={() => setSelectedFilter(f)}
                 className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-colors ${
                   selectedFilter === f
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-semibold'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                 }`}
               >
@@ -341,7 +341,7 @@ export default function DevicesPage() {
             <select
               value={selectedManufacturer}
               onChange={e => setSelectedManufacturer(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none focus:border-cyan-500"
+              className="bg-slate-900 border border-slate-750 rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none focus:border-cyan-500"
             >
               <option value="ALL">All Manufacturers</option>
               <option value="HP">HP</option>
@@ -363,7 +363,7 @@ export default function DevicesPage() {
             <select
               value={selectedPlatform}
               onChange={e => setSelectedPlatform(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none focus:border-cyan-500"
+              className="bg-slate-900 border border-slate-750 rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none focus:border-cyan-500"
             >
               <option value="ALL">All Platforms</option>
               <option value="Windows">Windows Service</option>
@@ -380,7 +380,7 @@ export default function DevicesPage() {
       </div>
 
       {/* Inventory Table */}
-      <div className="glass-panel rounded-2xl border border-slate-800 overflow-hidden">
+      <div className="metis-card rounded-xl border border-slate-800/90 overflow-hidden">
         {loading ? (
           <div className="p-12 text-center text-slate-400">
             <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -625,10 +625,10 @@ export default function DevicesPage() {
       {/* Device Details Modal */}
       {detailDevice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-[#121927] border border-slate-800 rounded-xl w-full max-w-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                <div className="p-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
                   <Laptop className="w-6 h-6" />
                 </div>
                 <div>
@@ -648,16 +648,16 @@ export default function DevicesPage() {
 
             <div className="space-y-4 mt-5 text-xs">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                  <span className="text-slate-400">Status</span>
+                <div className="p-3 bg-slate-900/90 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 font-medium">Status</span>
                   <div className="font-bold text-white mt-0.5">{detailDevice.status}</div>
                 </div>
-                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                  <span className="text-slate-400">Platform</span>
+                <div className="p-3 bg-slate-900/90 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 font-medium">Platform</span>
                   <div className="font-bold text-white mt-0.5">{detailDevice.currentOS || 'WINDOWS'}</div>
                 </div>
-                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                  <span className="text-slate-400">Acquisition Cost</span>
+                <div className="p-3 bg-slate-900/90 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 font-medium">Acquisition Cost</span>
                   <div className="font-bold text-emerald-400 font-mono mt-0.5">
                     TZS {detailDevice.purchasePrice?.toLocaleString() || 'N/A'}
                   </div>
@@ -665,7 +665,7 @@ export default function DevicesPage() {
               </div>
 
               {/* Cryptographic & Security Info */}
-              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+              <div className="p-4 bg-slate-900/90 rounded-lg border border-slate-800 space-y-2">
                 <div className="font-bold text-white text-xs flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
                   Hardware Security Attestation
@@ -686,7 +686,7 @@ export default function DevicesPage() {
               </div>
 
               {/* Borrower & Agreement */}
-              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+              <div className="p-4 bg-slate-900/90 rounded-lg border border-slate-800 space-y-2">
                 <div className="font-bold text-white text-xs flex items-center gap-2">
                   <User className="w-4 h-4 text-amber-400" />
                   Active Borrower & Agreement Assignment
@@ -710,8 +710,8 @@ export default function DevicesPage() {
               </div>
 
               {detailDevice.notes && (
-                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-slate-300">
-                  <span className="text-slate-400 block mb-1">Administrative Notes:</span>
+                <div className="p-3 bg-slate-900/90 rounded-lg border border-slate-800 text-slate-300">
+                  <span className="text-slate-400 block mb-1 font-medium">Administrative Notes:</span>
                   {detailDevice.notes}
                 </div>
               )}
@@ -720,7 +720,7 @@ export default function DevicesPage() {
             <div className="pt-4 mt-4 border-t border-slate-800 flex justify-end">
               <button
                 onClick={() => setDetailDevice(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-semibold transition-colors"
               >
                 Close
               </button>
@@ -732,7 +732,7 @@ export default function DevicesPage() {
       {/* Edit Device Modal */}
       {isEditModalOpen && editingDevice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+          <div className="bg-[#121927] border border-slate-800 rounded-xl w-full max-w-md p-6 shadow-2xl relative">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Edit2 className="w-5 h-5 text-cyan-400" />

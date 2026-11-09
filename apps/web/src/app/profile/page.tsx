@@ -184,9 +184,9 @@ export default function ProfilePage() {
       )}
 
       {/* Identity Summary Card */}
-      <div className="glass-panel p-6 rounded-2xl border border-slate-800 bg-navy-900/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+      <div className="metis-card p-6 rounded-xl border border-slate-800/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center font-bold text-xl text-navy-950 shadow-lg shadow-emerald-500/10">
+          <div className="w-14 h-14 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center font-bold text-xl text-navy-950 shadow-md">
             {profile?.email ? profile.email.slice(0, 2).toUpperCase() : 'LX'}
           </div>
           <div>
@@ -205,11 +205,11 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700 text-xs text-slate-300">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700/80 text-xs text-slate-300">
             Tenant: <strong className="text-white">Active (Production)</strong>
           </div>
-          <div className="px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700 text-xs text-slate-300">
+          <div className="px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700/80 text-xs text-slate-300">
             MFA: <strong className={profile?.mfaEnabled ? 'text-emerald-400' : 'text-amber-400'}>{profile?.mfaEnabled ? 'Enabled' : 'Disabled'}</strong>
           </div>
         </div>
@@ -219,9 +219,9 @@ export default function ProfilePage() {
       <div className="flex gap-2 border-b border-slate-800 pb-1 overflow-x-auto">
         <button
           onClick={() => setActiveTab('profile')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all ${
             activeTab === 'profile'
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+              ? 'bg-slate-800 text-emerald-400 border border-slate-700'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
           }`}
         >
@@ -231,9 +231,9 @@ export default function ProfilePage() {
 
         <button
           onClick={() => setActiveTab('security')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all ${
             activeTab === 'security'
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+              ? 'bg-slate-800 text-emerald-400 border border-slate-700'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
           }`}
         >
@@ -243,9 +243,9 @@ export default function ProfilePage() {
 
         <button
           onClick={() => setActiveTab('business')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all ${
             activeTab === 'business'
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+              ? 'bg-slate-800 text-emerald-400 border border-slate-700'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
           }`}
         >
@@ -255,9 +255,9 @@ export default function ProfilePage() {
 
         <button
           onClick={() => setActiveTab('hardware')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all ${
             activeTab === 'hardware'
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+              ? 'bg-slate-800 text-emerald-400 border border-slate-700'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
           }`}
         >
@@ -268,7 +268,7 @@ export default function ProfilePage() {
 
       {/* Tab 1: General Profile */}
       {activeTab === 'profile' && (
-        <form onSubmit={handleProfileSubmit} className="glass-panel p-8 rounded-2xl border border-slate-800 space-y-6">
+        <form onSubmit={handleProfileSubmit} className="metis-card p-6 sm:p-8 rounded-xl border border-slate-800/80 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-2">First Name</label>
@@ -352,7 +352,7 @@ export default function ProfilePage() {
 
       {/* Tab 2: Security & Password */}
       {activeTab === 'security' && (
-        <form onSubmit={handlePasswordSubmit} className="glass-panel p-8 rounded-2xl border border-slate-800 space-y-6">
+        <form onSubmit={handlePasswordSubmit} className="metis-card p-6 sm:p-8 rounded-xl border border-slate-800/80 space-y-6">
           <div className="max-w-xl space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-2 flex items-center gap-2">
@@ -415,7 +415,7 @@ export default function ProfilePage() {
 
       {/* Tab 3: Business Tenancy */}
       {activeTab === 'business' && (
-        <div className="glass-panel p-8 rounded-2xl border border-slate-800 space-y-6">
+        <div className="metis-card p-6 sm:p-8 rounded-xl border border-slate-800/80 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Registered Enterprise Name</label>
@@ -464,7 +464,7 @@ export default function ProfilePage() {
 
       {/* Tab 4: Hardware & Cryptography */}
       {activeTab === 'hardware' && (
-        <div className="glass-panel p-8 rounded-2xl border border-slate-800 space-y-6">
+        <div className="metis-card p-6 sm:p-8 rounded-xl border border-slate-800/80 space-y-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 rounded-xl bg-slate-900/50 border border-slate-800">
               <div className="flex items-center gap-3">

@@ -203,7 +203,7 @@ export default function ReturnsPage() {
             return (
               <div
                 key={ret.id}
-                className="glass-panel p-6 rounded-2xl border border-slate-800 hover:border-rose-500/30 transition-colors"
+                className="metis-card p-6 rounded-xl border border-slate-800/80 hover:border-rose-500/30 transition-colors"
               >
                 <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
                   <div className="space-y-3 flex-1">
@@ -293,7 +293,7 @@ export default function ReturnsPage() {
       {/* Initiate Return Modal */}
       {isInitiateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+          <div className="bg-[#121927] border border-slate-800 rounded-xl w-full max-w-md p-6 shadow-2xl relative">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <RotateCcw className="w-5 h-5 text-rose-400" />
@@ -372,7 +372,7 @@ export default function ReturnsPage() {
       {/* Complete Inspection Modal */}
       {inspectingReturn && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+          <div className="bg-[#121927] border border-slate-800 rounded-xl w-full max-w-md p-6 shadow-2xl relative">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <PackageCheck className="w-5 h-5 text-emerald-400" />

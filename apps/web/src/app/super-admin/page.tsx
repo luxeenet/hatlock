@@ -135,26 +135,26 @@ export default function SuperAdminPage() {
 
       {/* Global SaaS Platform KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div className="glass-panel p-5 rounded-xl border border-slate-800">
-          <div className="text-xs text-slate-400 font-medium">Total SaaS Tenants</div>
+        <div className="metis-card p-5 rounded-xl border border-slate-800/80">
+          <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Total SaaS Tenants</div>
           <div className="text-2xl font-bold text-white mt-1">
             {platformOverview.totalBusinesses || tenants.length}
           </div>
         </div>
-        <div className="glass-panel p-5 rounded-xl border border-slate-800">
-          <div className="text-xs text-slate-400 font-medium">Active Business Accounts</div>
+        <div className="metis-card p-5 rounded-xl border border-slate-800/80">
+          <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Active Business Accounts</div>
           <div className="text-2xl font-bold text-emerald-400 mt-1">
             {platformOverview.activeBusinesses || tenants.filter(t => t.status === 'ACTIVE').length}
           </div>
         </div>
-        <div className="glass-panel p-5 rounded-xl border border-slate-800">
-          <div className="text-xs text-slate-400 font-medium">Global Enrolled Laptops</div>
+        <div className="metis-card p-5 rounded-xl border border-slate-800/80">
+          <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Global Enrolled Laptops</div>
           <div className="text-2xl font-bold text-cyan-400 mt-1">
             {platformOverview.totalDevicesGlobal}
           </div>
         </div>
-        <div className="glass-panel p-5 rounded-xl border border-slate-800">
-          <div className="text-xs text-slate-400 font-medium">Global Financing Volume</div>
+        <div className="metis-card p-5 rounded-xl border border-slate-800/80">
+          <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Global Financing Volume</div>
           <div className="text-2xl font-bold text-indigo-400 mt-1">
             TZS {(platformOverview.globalGrossVolumeTZS || 0).toLocaleString()}
           </div>
@@ -162,7 +162,7 @@ export default function SuperAdminPage() {
       </div>
 
       {/* Tenant Directory */}
-      <div className="glass-panel rounded-2xl border border-slate-800 overflow-hidden">
+      <div className="metis-card rounded-xl border border-slate-800/90 overflow-hidden">
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-white">Registered Multi-Tenant Workspaces</h2>
           <span className="text-xs text-slate-400">PostgreSQL Tenant Isolation</span>
@@ -269,7 +269,7 @@ export default function SuperAdminPage() {
       {/* Quota Modal */}
       {quotaModalTenant && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl relative">
+          <div className="bg-[#121927] border border-slate-800 rounded-xl w-full max-w-sm p-6 shadow-2xl relative">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <h3 className="text-base font-bold text-white">Override Device Quota</h3>
               <button

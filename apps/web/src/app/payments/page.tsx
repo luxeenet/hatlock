@@ -259,27 +259,27 @@ export default function PaymentsPage() {
         <>
           {/* Gateway Status Banner */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="glass-panel p-5 rounded-xl border border-slate-800">
-              <div className="text-xs text-slate-400 font-medium">Gateway Protocol</div>
+            <div className="metis-card p-5 rounded-xl border border-slate-800/80">
+              <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Gateway Protocol</div>
               <div className="text-base font-bold text-white mt-1">Dual-Engine (HatPesa + SonicPesa)</div>
               <div className="text-[11px] text-emerald-400 mt-1 font-mono">HMAC-SHA256 Signed Webhooks</div>
             </div>
 
-            <div className="glass-panel p-5 rounded-xl border border-slate-800">
-              <div className="text-xs text-slate-400 font-medium">Reconciliation Engine</div>
+            <div className="metis-card p-5 rounded-xl border border-slate-800/80">
+              <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Reconciliation Engine</div>
               <div className="text-base font-bold text-emerald-400 mt-1">Active (Real-Time)</div>
               <div className="text-[11px] text-slate-400 mt-1">Direct PostgreSQL Double-Entry Ledger</div>
             </div>
 
-            <div className="glass-panel p-5 rounded-xl border border-slate-800">
-              <div className="text-xs text-slate-400 font-medium">Total Transactions</div>
+            <div className="metis-card p-5 rounded-xl border border-slate-800/80">
+              <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Total Transactions</div>
               <div className="text-base font-bold text-cyan-400 mt-1">{payments.length} Recorded</div>
               <div className="text-[11px] text-slate-400 mt-1">M-Pesa / Tigo Pesa / Airtel Money / Halopesa</div>
             </div>
           </div>
 
           {/* Transaction Table */}
-          <div className="glass-panel rounded-2xl border border-slate-800 overflow-hidden">
+          <div className="metis-card rounded-xl border border-slate-800/90 overflow-hidden">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-white">Reconciled Financial Ledger</h2>
               <span className="text-xs text-slate-400">Live ledger query</span>
@@ -464,7 +464,7 @@ export default function PaymentsPage() {
       {/* Checkout Modal */}
       {checkoutModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+          <div className="bg-[#121927] border border-slate-800 rounded-xl w-full max-w-md p-6 shadow-2xl relative">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Smartphone className="w-5 h-5 text-emerald-400" />
@@ -628,7 +628,7 @@ export default function PaymentsPage() {
       {/* Payout Modal */}
       {payoutModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+          <div className="bg-[#121927] border border-slate-800 rounded-xl w-full max-w-md p-6 shadow-2xl relative">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Send className="w-5 h-5 text-indigo-400" />

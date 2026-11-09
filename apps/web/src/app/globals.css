@@ -3,24 +3,71 @@
 @tailwind utilities;
 
 :root {
-  --background: #090d16;
+  --background: #0b0f19;
   --foreground: #f8fafc;
+  --card-bg: #121927;
+  --card-border: rgba(51, 65, 85, 0.6);
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar for Metis-inspired Dashboard */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b0f19;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Enterprise Card and Table Styling */
+.metis-card {
+  background: #121927;
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.2), 0 1px 2px -1px rgba(0, 0, 0, 0.2);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.metis-card:hover {
+  border-color: rgba(71, 85, 105, 0.8);
+}
+
+/* Subtle Table Header */
+.metis-table-header {
+  background: rgba(15, 23, 42, 0.75);
+  border-bottom: 1px solid rgba(51, 65, 85, 0.7);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
 }
 
 /* Glassmorphism panel styling */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.75);
+  background: rgba(18, 25, 39, 0.85);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(51, 65, 85, 0.6);
 }
 
 .glass-panel-hover:hover {
   border-color: rgba(34, 197, 94, 0.4);
-  box-shadow: 0 0 20px rgba(34, 197, 94, 0.1);
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.08);
 }
