@@ -7,6 +7,9 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+      },
       colors: {
         brand: {
           50: '#f0fdf4',
@@ -19,9 +22,13 @@ module.exports = {
         navy: {
           800: '#1e293b',
           900: '#0f172a',
-          950: '#020617',
+          950: '#0b0f19',
         }
       },
+      boxShadow: {
+        'metis': '0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15)',
+        'metis-lg': '0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.15)',
+      }
     },
   },
   plugins: [],

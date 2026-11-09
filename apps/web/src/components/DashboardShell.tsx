@@ -26,7 +26,8 @@ import {
   CheckCircle2,
   Info,
   X,
-  Menu
+  Menu,
+  Search
 } from 'lucide-react';
 
 interface UserInfo {
@@ -95,6 +96,39 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   ]);
 
   const notifRef = useRef<HTMLDivElement>(null);
+
+  // Global Search State (Metis Style)
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // Keyboard shortcut listener: Ctrl+K or Cmd+K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setIsSearchOpen(true);
+      } else if (e.key === 'Escape') {
+        setIsSearchOpen(false);
+        searchInputRef.current?.blur();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Click outside search container to close results
+  useEffect(() => {
+    function handleClickOutsideSearch(event: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setIsSearchOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutsideSearch);
+    return () => document.removeEventListener('mousedown', handleClickOutsideSearch);
+  }, []);
 
   useEffect(() => {
     if (pathname === '/login') {
@@ -195,6 +229,27 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     { href: '/audit-logs', label: 'Security & Audit Logs', icon: Lock, color: 'text-orange-400' },
     { href: '/profile', label: 'Profile & Settings', icon: User, color: 'text-emerald-400' },
   ];
+
+  const searchableRoutes = [
+    { href: '/', title: 'Overview & Analytics', category: 'Analytics', icon: BarChart3, keywords: 'dashboard revenue metrics stats kpis' },
+    { href: '/devices', title: 'Device Inventory & Lock State', category: 'Devices', icon: Laptop, keywords: 'hardware laptops imei lock serial' },
+    { href: '/customers', title: 'Customer Records & KYC', category: 'CRM', icon: Users, keywords: 'clients identity national id verifications' },
+    { href: '/financing', title: 'Hire Purchase Agreements', category: 'Financing', icon: FileText, keywords: 'contracts loans installments instalments' },
+    { href: '/rentals', title: 'Hardware Rentals & Leases', category: 'Financing', icon: Repeat, keywords: 'short term leases security deposits' },
+    { href: '/payments', title: 'Payments & HatPesa Ledger', category: 'Billing', icon: CreditCard, keywords: 'transactions mobile money collections' },
+    { href: '/returns', title: 'Returns & Inspection Workflow', category: 'Operations', icon: RotateCcw, keywords: 'reclaimed deposits refund grading' },
+    { href: '/employees', title: 'Team & Employee Directory', category: 'Organization', icon: UserPlus, keywords: 'staff managers roles agents' },
+    { href: '/branches', title: 'Branch Hubs & Locations', category: 'Organization', icon: Building, keywords: 'offices stores locations' },
+    { href: '/audit-logs', title: 'Security & Audit Trail', category: 'Security', icon: Lock, keywords: 'hashes cryptographic compliance logs' },
+    { href: '/profile', title: 'Account Settings & Profile', category: 'Account', icon: User, keywords: 'security password email business' },
+    ...(user?.role === 'SUPER_ADMIN' ? [{ href: '/super-admin', title: 'Super-Admin Governance', category: 'Governance', icon: ShieldAlert, keywords: 'tenants platform system configuration' }] : [])
+  ];
+
+  const filteredRoutes = searchableRoutes.filter(item => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return item.title.toLowerCase().includes(q) || item.category.toLowerCase().includes(q) || item.keywords.includes(q);
+  });
 
   return (
     <div className="min-h-screen bg-navy-950 text-slate-100 flex">
@@ -347,8 +402,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       {/* Main Content Area */}
       <div className="flex-1 lg:ml-64 flex flex-col min-h-screen min-w-0">
         {/* Top Bar */}
-        <header className="h-16 border-b border-slate-800/80 bg-[#0b0f19]/80 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3 sm:gap-4">
+        <header className="h-16 border-b border-slate-800/80 bg-[#0b0f19]/80 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 lg:px-8 gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             {/* Mobile Hamburger Button */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -358,7 +413,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               <Menu className="w-5 h-5" />
             </button>
 
-            <div className="text-xs font-medium text-slate-400 hidden sm:flex items-center gap-2">
+            <div className="text-xs font-medium text-slate-400 hidden xl:flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-slate-600" />
               <span>Location:</span>
               <span className="text-slate-200 font-medium">Main Headquarters</span>
@@ -366,7 +421,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             {user?.email && (
               <Link
                 href="/profile"
-                className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700/60 hover:border-emerald-500/40 hover:text-emerald-400 transition-colors truncate max-w-[220px]"
+                className="hidden 2xl:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800/80 text-slate-300 border border-slate-700/60 hover:border-emerald-500/40 hover:text-emerald-400 transition-colors truncate max-w-[200px]"
               >
                 <UserCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <span className="truncate">{user.email}</span>
@@ -374,7 +429,82 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             )}
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          {/* Metis-inspired Global Search Bar */}
+          <div className="relative flex-1 max-w-md mx-2" ref={searchContainerRef}>
+            <div className="relative flex items-center">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
+              <input
+                ref={searchInputRef}
+                type="search"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchOpen(true);
+                }}
+                onFocus={() => setIsSearchOpen(true)}
+                placeholder="Search... (Ctrl+K)"
+                className="w-full pl-9 pr-16 py-1.5 text-xs bg-slate-900/90 text-slate-100 placeholder-slate-400 border border-slate-700/80 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500/60 focus:border-emerald-500/80 transition-all shadow-inner"
+                aria-label="Search dashboard"
+              />
+              <div className="absolute right-2 flex items-center gap-1 pointer-events-none">
+                <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono font-medium text-slate-400 bg-slate-800/80 border border-slate-700 rounded shadow-xs">
+                  Ctrl+K
+                </kbd>
+              </div>
+            </div>
+
+            {/* Search Results Dropdown */}
+            {isSearchOpen && (
+              <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#121927] border border-slate-700 shadow-2xl rounded-xl z-50 overflow-hidden divide-y divide-slate-800/80 animate-fade-in">
+                <div className="px-3 py-2 text-[10.5px] font-bold text-slate-400 uppercase tracking-wider bg-[#0b0f19]/80 flex items-center justify-between">
+                  <span>{searchQuery ? `Matching Results (${filteredRoutes.length})` : 'Quick Navigation'}</span>
+                  <span className="text-[10px] lowercase text-slate-500 font-normal">esc to close</span>
+                </div>
+                <div className="max-h-72 overflow-y-auto py-1">
+                  {filteredRoutes.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-slate-400">
+                      No matching destinations found for &quot;{searchQuery}&quot;.
+                    </div>
+                  ) : (
+                    filteredRoutes.map((route) => {
+                      const RouteIcon = route.icon;
+                      return (
+                        <button
+                          key={route.href}
+                          type="button"
+                          onClick={() => {
+                            router.push(route.href);
+                            setIsSearchOpen(false);
+                            setSearchQuery('');
+                          }}
+                          className="w-full px-3 py-2 text-left flex items-center justify-between hover:bg-slate-800/60 transition-colors group"
+                        >
+                          <div className="flex items-center gap-2.5 truncate">
+                            <div className="w-7 h-7 rounded-md bg-slate-800 text-emerald-400 flex items-center justify-center shrink-0 group-hover:bg-emerald-500/20 transition-colors">
+                              <RouteIcon className="w-3.5 h-3.5" />
+                            </div>
+                            <div className="truncate">
+                              <div className="text-xs font-medium text-slate-200 group-hover:text-white truncate">
+                                {route.title}
+                              </div>
+                              <div className="text-[10px] text-slate-400 truncate">
+                                {route.href}
+                              </div>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-medium text-slate-400 px-1.5 py-0.5 rounded bg-slate-800/60 border border-slate-700/60 shrink-0 ml-2">
+                            {route.category}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <div className="hidden sm:flex items-center gap-2 text-xs font-medium px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               Hardware Watchdog Active
