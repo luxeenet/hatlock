@@ -515,10 +515,24 @@ export default function DevicesPage() {
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-slate-400">
-                            {device.currentOS === 'ANDROID' ? 'Device Owner Kiosk Ready' :
-                             device.currentOS === 'IOS' ? 'Supervised Apple MDM' :
-                             device.identity?.tpmPresent !== false ? 'TPM 2.0 & BitLocker' : 'Standard Agent'}
+                          <div className="flex items-center gap-2 text-[11px] mt-0.5">
+                            <span className="text-slate-400">
+                              {device.currentOS === 'ANDROID' ? 'Device Owner Kiosk Ready' :
+                               device.currentOS === 'IOS' ? 'Supervised Apple MDM' :
+                               device.identity?.tpmPresent !== false ? 'TPM 2.0 & BitLocker' : 'Standard Agent'}
+                            </span>
+                            <span className="text-slate-600">•</span>
+                            {device.agentInfo?.isOnline ? (
+                              <span className="flex items-center gap-1 text-emerald-400 font-medium" title={`Agent v${device.agentInfo.agentVersion || '2.4.0'} active`}>
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                Agent Online
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-slate-400" title="Physical hardware agent not yet connected">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                                Agent Offline
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -1087,14 +1101,63 @@ export default function DevicesPage() {
 
             <div className="space-y-4 mt-4">
               <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs">
-                <div className="text-slate-400">Target Hardware:</div>
-                <div className="font-semibold text-white mt-0.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Target Hardware:</span>
+                  {selectedDevice.agentInfo?.isOnline ? (
+                    <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      Agent Connected
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
+                      <span className="w-2 h-2 rounded-full bg-amber-400" />
+                      Agent Offline
+                    </span>
+                  )}
+                </div>
+                <div className="font-semibold text-white mt-1">
                   {selectedDevice.manufacturer} {selectedDevice.model}
                 </div>
                 <div className="font-mono text-cyan-400 text-[11px] mt-0.5">
                   S/N: {selectedDevice.serialNumber}
                 </div>
               </div>
+
+              {!selectedDevice.agentInfo?.isOnline && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded-xl text-xs space-y-2">
+                  <div className="flex items-center gap-1.5 text-amber-300 font-semibold">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>Hardware Agent Not Yet Connected</span>
+                  </div>
+                  <p className="text-slate-300 text-[11px] leading-relaxed">
+                    The {commandType === 'RESTRICT' ? 'lock' : 'restore'} command will be queued cryptographically. To enforce this directly on the physical {selectedDevice.manufacturer} laptop, run this 1-line command in PowerShell (Run as Administrator):
+                  </p>
+                  <div className="flex items-center gap-2 bg-slate-950 p-2 rounded-lg border border-slate-800">
+                    <code className="text-[10px] text-cyan-300 font-mono flex-1 select-all break-all">
+                      powershell -ExecutionPolicy Bypass -Command &quot;irm {API_BASE}/downloads/windows/install.ps1?deviceId={selectedDevice.id} | iex&quot;
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`powershell -ExecutionPolicy Bypass -Command "irm ${API_BASE}/downloads/windows/install.ps1?deviceId=${selectedDevice.id} | iex"`);
+                        setCopiedScript(true);
+                        setTimeout(() => setCopiedScript(false), 2500);
+                      }}
+                      className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 shrink-0"
+                      title="Copy 1-line command"
+                    >
+                      {copiedScript ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {selectedDevice.agentInfo?.isOnline && (
+                <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs flex items-center gap-2 text-emerald-300">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Physical hardware agent is <strong>ONLINE</strong>. Lock command will be enforced immediately on the machine.</span>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Action Type</label>
@@ -1399,7 +1462,7 @@ export default function DevicesPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          const cmd = `powershell -ExecutionPolicy Bypass -Command "irm ${API_BASE}/downloads/windows/install.ps1 | iex"`;
+                          const cmd = `powershell -ExecutionPolicy Bypass -Command "irm ${API_BASE}/downloads/windows/install.ps1?deviceId=${provisioningDevice.id} | iex"`;
                           navigator.clipboard.writeText(cmd);
                           setCopiedScript(true);
                           setTimeout(() => setCopiedScript(false), 3000);
@@ -1411,7 +1474,7 @@ export default function DevicesPage() {
                       </button>
                     </div>
                     <pre className="p-2.5 bg-slate-900 rounded-lg text-emerald-400 font-mono text-[11px] overflow-x-auto select-all leading-tight">
-powershell -ExecutionPolicy Bypass -Command &quot;irm {API_BASE}/downloads/windows/install.ps1 | iex&quot;
+powershell -ExecutionPolicy Bypass -Command &quot;irm {API_BASE}/downloads/windows/install.ps1?deviceId={provisioningDevice.id} | iex&quot;
                     </pre>
                   </div>
 

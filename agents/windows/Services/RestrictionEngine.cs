@@ -14,6 +14,9 @@ public class RestrictionEngine
     private Process? _overlayProcess;
     private bool _isRestricted;
 
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool LockWorkStation();
+
     public RestrictionEngine(ILogger<RestrictionEngine> logger)
     {
         _logger = logger;
@@ -32,6 +35,17 @@ public class RestrictionEngine
             info.AgreementNumber, info.Reason);
 
         _isRestricted = true;
+
+        // Immediate physical lock of the active Windows user workstation session
+        try
+        {
+            _logger.LogInformation("Invoking user32.dll LockWorkStation()...");
+            LockWorkStation();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to call LockWorkStation API");
+        }
 
         // Write restriction parameters to temp file for overlay process to read
         var configPath = Path.Combine(Path.GetTempPath(), "hatlock_restriction.json");

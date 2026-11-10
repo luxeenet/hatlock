@@ -61,10 +61,17 @@ export async function agentRoutes(server: FastifyInstance) {
         }
       });
 
+      const dev = await prisma.device.findUnique({
+        where: { id: data.deviceId },
+        select: { status: true }
+      });
+
       return reply.send({
         status: 'OK',
         serverTime: new Date().toISOString(),
-        hasPendingCommands: pendingCount > 0
+        hasPendingCommands: pendingCount > 0,
+        deviceStatus: dev?.status || 'AVAILABLE',
+        isRestricted: dev?.status === 'RESTRICTED'
       });
     } catch (err: any) {
       server.log.error(err, 'Heartbeat processing failed');

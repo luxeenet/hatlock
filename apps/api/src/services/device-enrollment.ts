@@ -119,12 +119,22 @@ function computeConfidenceScore(hw: HardwareIdentityInput, os: DeviceOS): { scor
 
 export async function enrollDevice(input: EnrollmentInput) {
   return prisma.$transaction(async (tx) => {
-    // 1. Validate enrollment token — find the pre-registered device
-    const device = await tx.device.findFirst({
+    // 1. Validate enrollment token or hardware serial — find the pre-registered device
+    const token = input.enrollmentToken?.trim();
+    const isUuid = token && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token);
+    const sn = input.hardware.serialNumber?.trim();
+
+    let device: any = await tx.device.findFirst({
       where: {
-        // The enrollment token is stored as a tag or looked up differently
-        // For now: match by serial number + business context passed in token
-        serialNumber: input.hardware.serialNumber
+        OR: [
+          ...(isUuid ? [{ id: token }] : []),
+          ...(sn ? [
+            { serialNumber: sn },
+            { serialNumber: { equals: sn, mode: 'insensitive' as const } },
+            { serialNumber: { contains: sn, mode: 'insensitive' as const } }
+          ] : []),
+          ...(input.hardware.systemUUID ? [{ serialNumber: input.hardware.systemUUID }] : [])
+        ]
       },
       include: {
         identity: true,
@@ -138,12 +148,49 @@ export async function enrollDevice(input: EnrollmentInput) {
     });
 
     if (!device) {
-      // New enrollment — device not yet in the system
+      // Auto-register device under active business so installation never fails
+      const activeBiz = await tx.business.findFirst({
+        where: { status: 'ACTIVE' },
+        orderBy: { createdAt: 'asc' }
+      }) || await tx.business.findFirst({
+        orderBy: { createdAt: 'asc' }
+      });
+
+      if (activeBiz) {
+        device = await tx.device.create({
+          data: {
+            businessId: activeBiz.id,
+            serialNumber: sn || `SN-${Date.now()}`,
+            manufacturer: input.hardware.manufacturer || 'Lenovo',
+            model: input.hardware.model || 'PC',
+            deviceType: 'LAPTOP',
+            currentOS: input.os,
+            status: DeviceStatus.AVAILABLE,
+            physicalCondition: 'EXCELLENT',
+            purchasePrice: 1200000
+          },
+          include: {
+            identity: true,
+            financingAgreements: {
+              where: { status: { notIn: ['COMPLETED', 'TERMINATED', 'CANCELLED', 'OWNERSHIP_TRANSFERRED'] } }
+            },
+            rentalAgreements: {
+              where: { status: { notIn: ['COMPLETED', 'TERMINATED', 'CANCELLED', 'EXPIRED', 'RETURNED'] } }
+            }
+          }
+        });
+      } else {
+        throw Object.assign(new Error('Device not found. Please register the device first.'), { statusCode: 404 });
+      }
+    }
+
+    if (!device) {
       throw Object.assign(new Error('Device not found. Please register the device first.'), { statusCode: 404 });
     }
 
+    const currentDevice = device;
     const identityHash = computeIdentityHash(input.hardware);
-    const previousOS = device.currentOS;
+    const previousOS = currentDevice.currentOS;
     const osChanged = previousOS !== DeviceOS.UNKNOWN && previousOS !== input.os;
 
     // 2. Update or create hardware identity
@@ -373,17 +420,17 @@ export async function determineDeviceAuthorization(deviceId: string) {
     return { authorized: true, reason: 'Device owned by customer — no financing restrictions' };
   }
 
-  // Active restrictions
-  if (device.restrictions.length > 0) {
+  // Active restrictions or device marked RESTRICTED
+  if (device.restrictions.length > 0 || device.status === DeviceStatus.RESTRICTED) {
     const restriction = device.restrictions[0];
     return {
       authorized: false,
-      reason: restriction.reason,
+      reason: restriction?.reason || 'Device is restricted by administrator',
       restrictionInfo: {
-        outstandingAmountTZS: restriction.outstandingAmountTZS,
-        paymentInstructions: restriction.paymentInstructions,
-        supportContact: restriction.supportContact,
-        recoveryInstructions: restriction.recoveryInstructions
+        outstandingAmountTZS: restriction?.outstandingAmountTZS ?? 0,
+        paymentInstructions: restriction?.paymentInstructions || 'Contact business administrator to restore access',
+        supportContact: restriction?.supportContact || 'Luxeenet Support',
+        recoveryInstructions: restriction?.recoveryInstructions || 'Please contact support with device serial number.'
       }
     };
   }

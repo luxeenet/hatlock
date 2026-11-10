@@ -250,18 +250,78 @@ async function buildServer() {
   // Windows Agent Installer Script Download
   server.get('/downloads/windows/install.ps1', async (request, reply) => {
     reply.header('Content-Type', 'text/plain; charset=utf-8');
-    reply.header('Cache-Control', 'public, max-age=3600');
+    reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
 
     try {
       const fs = await import('fs');
       const path = await import('path');
       const scriptPath = path.resolve(process.cwd(), '../../agents/windows/install-agent.ps1');
       if (fs.existsSync(scriptPath)) {
+        let content = fs.readFileSync(scriptPath, 'utf8');
+
+        // Dynamically compute ApiUrl and default DeviceId from request
+        const proto = (request.headers['x-forwarded-proto'] as string) || request.protocol || 'http';
+        const host = request.headers.host || 'localhost:3000';
+        const requestApiUrl = `${proto}://${host}`;
+        const targetDeviceId = (request.query as any)?.deviceId || (request.query as any)?.enrollmentToken || '';
+
+        // Inject computed defaults into the PowerShell param block
+        content = content.replace(
+          /\[string\]\$ApiUrl\s*=\s*"[^"]*"/,
+          `[string]$ApiUrl = "${requestApiUrl}"`
+        );
+        if (targetDeviceId) {
+          content = content.replace(
+            /\[string\]\$DeviceId\s*=\s*"[^"]*"/,
+            `[string]$DeviceId = "${targetDeviceId}"`
+          );
+          content = content.replace(
+            /\[string\]\$EnrollmentToken\s*=\s*"[^"]*"/,
+            `[string]$EnrollmentToken = "${targetDeviceId}"`
+          );
+        }
+
+        return reply.send(content);
+      }
+    } catch (err: any) {
+      server.log.error(err, 'Failed to serve install.ps1');
+    }
+
+    return reply.send('# HatLock Windows Agent Installer\nWrite-Host "HatLock Agent Installer loaded." -ForegroundColor Cyan\n');
+  });
+
+  // Windows Agent Daemon Script Download
+  server.get('/downloads/windows/HatLockAgent.ps1', async (request, reply) => {
+    reply.header('Content-Type', 'text/plain; charset=utf-8');
+    reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const scriptPath = path.resolve(process.cwd(), '../../agents/windows/HatLockAgent.ps1');
+      if (fs.existsSync(scriptPath)) {
         return reply.send(fs.createReadStream(scriptPath));
       }
     } catch (_) {}
 
-    return reply.send('# HatLock Windows Agent Installer\nWrite-Host "HatLock Agent Installer loaded." -ForegroundColor Cyan\n');
+    return reply.send('# HatLock Windows Agent Daemon\n');
+  });
+
+  // Windows Lock Screen Script Download
+  server.get('/downloads/windows/HatLockLockScreen.ps1', async (request, reply) => {
+    reply.header('Content-Type', 'text/plain; charset=utf-8');
+    reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const scriptPath = path.resolve(process.cwd(), '../../agents/windows/HatLockLockScreen.ps1');
+      if (fs.existsSync(scriptPath)) {
+        return reply.send(fs.createReadStream(scriptPath));
+      }
+    } catch (_) {}
+
+    return reply.send('# HatLock Windows Lock Screen\n');
   });
 
   // Linux Agent Installer Script Download
