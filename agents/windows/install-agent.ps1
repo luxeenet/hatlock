@@ -1,5 +1,5 @@
 # ==============================================================================
-# HatLock Windows Protection Agent — Hardened Universal Installer
+# HatLock Windows Protection Agent - Hardened Universal Installer
 # Developed by Luxeenet for HatLock PRO
 #
 # Multi-tier architecture:
@@ -31,8 +31,8 @@ $ErrorActionPreference = "Continue"
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "   HATLOCK PRO — HARDENED WINDOWS FLEET SECURITY AGENT      " -ForegroundColor White
-Write-Host "   Cryptographic Lock & Financing Protection Engine         " -ForegroundColor Cyan
+Write-Host "   HATLOCK PRO - HARDENED WINDOWS FLEET SECURITY AGENT      " -ForegroundColor White
+Write-Host "   Cryptographic Lock and Financing Protection Engine       " -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -148,14 +148,14 @@ $configPath = Join-Path $DataDir "config.json"
 $configObj | ConvertTo-Json -Depth 5 | Set-Content -Path $configPath -Force
 Write-Host "  -> Configuration saved to $configPath" -ForegroundColor Gray
 
-# 6. Deploy HatLock Agent, User Client & Lock Screen Scripts
+# 6. Deploy HatLock Agent, User Client and Lock Screen Scripts
 Write-Host "[4/6] Deploying multi-tier protection modules..." -ForegroundColor Yellow
 
 $agentScriptPath = Join-Path $InstallDir "HatLockAgent.ps1"
 $userClientScriptPath = Join-Path $InstallDir "HatLockUserClient.ps1"
 $lockScreenScriptPath = Join-Path $InstallDir "HatLockLockScreen.ps1"
 
-# Copy or fetch modules
+# Copy from local repository or fetch from API
 $files = @(
     @{ Name = "HatLockAgent.ps1"; Dest = $agentScriptPath },
     @{ Name = "HatLockUserClient.ps1"; Dest = $userClientScriptPath },
@@ -173,21 +173,18 @@ foreach ($f in $files) {
     }
 }
 
-# 7. Apply Strict NTFS Access Control Lists (ACLs)
+# 7. Apply Strict NTFS Access Control Lists
 Write-Host "[5/6] Hardening filesystem permissions (Anti-Tamper ACLs)..." -ForegroundColor Yellow
 
 try {
-    # Program Files: SYSTEM and Administrators Full Control; Users Read & Execute only
-    & icacls "$InstallDir" /inheritance:r /grant:r "NT AUTHORITY\SYSTEM:(OI)(CI)F" "BUILTIN\Administrators:(OI)(CI)F" "BUILTIN\Users:(OI)(CI)RX" /t /c /q 2>$null
-
-    # ProgramData: SYSTEM and Administrators Full Control; Users Read only
-    & icacls "$DataDir" /inheritance:r /grant:r "NT AUTHORITY\SYSTEM:(OI)(CI)F" "BUILTIN\Administrators:(OI)(CI)F" "BUILTIN\Users:(OI)(CI)RX" /t /c /q 2>$null
+    Start-Process "icacls.exe" -ArgumentList "`"$InstallDir`" /inheritance:r /grant:r `"NT AUTHORITY\SYSTEM:(OI)(CI)F`" `"BUILTIN\Administrators:(OI)(CI)F`" `"BUILTIN\Users:(OI)(CI)RX`" /t /c /q" -Wait -NoNewWindow -ErrorAction SilentlyContinue
+    Start-Process "icacls.exe" -ArgumentList "`"$DataDir`" /inheritance:r /grant:r `"NT AUTHORITY\SYSTEM:(OI)(CI)F`" `"BUILTIN\Administrators:(OI)(CI)F`" `"BUILTIN\Users:(OI)(CI)RX`" /t /c /q" -Wait -NoNewWindow -ErrorAction SilentlyContinue
     Write-Host "  -> NTFS permissions locked to SYSTEM and Administrators only." -ForegroundColor Green
 } catch {
     Write-Host "  -> Note on ACL application: $_" -ForegroundColor DarkYellow
 }
 
-# 8. Register Scheduled Tasks & Interactive Session Launchers
+# 8. Register Scheduled Tasks and Interactive Session Launchers
 Write-Host "[6/6] Registering SYSTEM Watchdog and Interactive Session Companion..." -ForegroundColor Yellow
 
 # A. Privileged Background Watchdog (SYSTEM)

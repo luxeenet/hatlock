@@ -216,7 +216,7 @@ while ($true) {
 
                         # C. Cryptographic Signature Check
                         $canonicalString = if ($cmd.canonical) { $cmd.canonical } else {
-                            @{
+                            [ordered]@{
                                 deviceId = $cmd.deviceId
                                 nonce = $cmd.nonce
                                 expiresAt = $cmd.expiresAt
@@ -294,9 +294,14 @@ while ($true) {
             }
         }
 
-        # 3. Server Status Synchronization (Fallback Check)
+        # 3. Server Status Synchronization (Live Heartbeat State Check)
         if ($hbResponse -and $null -ne $hbResponse.isRestricted) {
-            if ($hbResponse.isRestricted -eq $false -and (Test-Path $FlagPath)) {
+            if ($hbResponse.isRestricted -eq $true -and -not (Test-Path $FlagPath)) {
+                Write-AgentLog "Server confirmed device RESTRICTED via heartbeat policy. Enforcing lock." "WARN"
+                Set-Content -Path $FlagPath -Value "RESTRICTED" -Force
+                Invoke-PhysicalWorkstationLock
+            }
+            elseif ($hbResponse.isRestricted -eq $false -and (Test-Path $FlagPath)) {
                 # Dashboard marks device restored
                 Write-AgentLog "Server confirmed device active. Clearing restriction flag." "INFO"
                 Remove-Item -Path $FlagPath -Force -ErrorAction SilentlyContinue

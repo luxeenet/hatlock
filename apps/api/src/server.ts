@@ -8,6 +8,8 @@ import jwt from '@fastify/jwt';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import fs from 'fs';
+import path from 'path';
 
 import { prisma } from './lib/prisma.js';
 import { redis } from './lib/redis.js';
@@ -247,16 +249,31 @@ async function buildServer() {
     return reply.send(placeholderApk);
   });
 
+  // Helper to locate agent files regardless of cwd / Docker / monorepo nesting
+  const resolveAgentFile = (subpath: string): string | null => {
+    const candidates = [
+      path.resolve(process.cwd(), subpath),
+      path.resolve(process.cwd(), '..', subpath),
+      path.resolve(process.cwd(), '../..', subpath),
+      path.resolve(__dirname, '..', '..', '..', subpath),
+      path.resolve(__dirname, '..', '..', subpath),
+      path.resolve(__dirname, '..', subpath),
+      path.resolve('/app', subpath),
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) return c;
+    }
+    return null;
+  };
+
   // Windows Agent Installer Script Download
   server.get('/downloads/windows/install.ps1', async (request, reply) => {
     reply.header('Content-Type', 'text/plain; charset=utf-8');
     reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
 
     try {
-      const fs = await import('fs');
-      const path = await import('path');
-      const scriptPath = path.resolve(process.cwd(), '../../agents/windows/install-agent.ps1');
-      if (fs.existsSync(scriptPath)) {
+      const scriptPath = resolveAgentFile('agents/windows/install-agent.ps1');
+      if (scriptPath && fs.existsSync(scriptPath)) {
         let content = fs.readFileSync(scriptPath, 'utf8');
 
         // Dynamically compute ApiUrl and default DeviceId from request
@@ -307,10 +324,8 @@ async function buildServer() {
     reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
 
     try {
-      const fs = await import('fs');
-      const path = await import('path');
-      const scriptPath = path.resolve(process.cwd(), '../../agents/windows/HatLockUserClient.ps1');
-      if (fs.existsSync(scriptPath)) {
+      const scriptPath = resolveAgentFile('agents/windows/HatLockUserClient.ps1');
+      if (scriptPath && fs.existsSync(scriptPath)) {
         return reply.send(fs.createReadStream(scriptPath));
       }
     } catch (_) {}
@@ -324,10 +339,8 @@ async function buildServer() {
     reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
 
     try {
-      const fs = await import('fs');
-      const path = await import('path');
-      const scriptPath = path.resolve(process.cwd(), '../../agents/windows/HatLockAgent.ps1');
-      if (fs.existsSync(scriptPath)) {
+      const scriptPath = resolveAgentFile('agents/windows/HatLockAgent.ps1');
+      if (scriptPath && fs.existsSync(scriptPath)) {
         return reply.send(fs.createReadStream(scriptPath));
       }
     } catch (_) {}
@@ -341,10 +354,8 @@ async function buildServer() {
     reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
 
     try {
-      const fs = await import('fs');
-      const path = await import('path');
-      const scriptPath = path.resolve(process.cwd(), '../../agents/windows/HatLockLockScreen.ps1');
-      if (fs.existsSync(scriptPath)) {
+      const scriptPath = resolveAgentFile('agents/windows/HatLockLockScreen.ps1');
+      if (scriptPath && fs.existsSync(scriptPath)) {
         return reply.send(fs.createReadStream(scriptPath));
       }
     } catch (_) {}
@@ -358,10 +369,8 @@ async function buildServer() {
     reply.header('Cache-Control', 'public, max-age=3600');
 
     try {
-      const fs = await import('fs');
-      const path = await import('path');
-      const scriptPath = path.resolve(process.cwd(), '../../agents/linux/install.sh');
-      if (fs.existsSync(scriptPath)) {
+      const scriptPath = resolveAgentFile('agents/linux/install.sh');
+      if (scriptPath && fs.existsSync(scriptPath)) {
         return reply.send(fs.createReadStream(scriptPath));
       }
     } catch (_) {}
