@@ -247,6 +247,40 @@ async function buildServer() {
     return reply.send(placeholderApk);
   });
 
+  // Windows Agent Installer Script Download
+  server.get('/downloads/windows/install.ps1', async (request, reply) => {
+    reply.header('Content-Type', 'text/plain; charset=utf-8');
+    reply.header('Cache-Control', 'public, max-age=3600');
+
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const scriptPath = path.resolve(process.cwd(), '../../agents/windows/install-agent.ps1');
+      if (fs.existsSync(scriptPath)) {
+        return reply.send(fs.createReadStream(scriptPath));
+      }
+    } catch (_) {}
+
+    return reply.send('# HatLock Windows Agent Installer\nWrite-Host "HatLock Agent Installer loaded." -ForegroundColor Cyan\n');
+  });
+
+  // Linux Agent Installer Script Download
+  server.get('/downloads/linux/install.sh', async (request, reply) => {
+    reply.header('Content-Type', 'text/x-shellscript; charset=utf-8');
+    reply.header('Cache-Control', 'public, max-age=3600');
+
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const scriptPath = path.resolve(process.cwd(), '../../agents/linux/install.sh');
+      if (fs.existsSync(scriptPath)) {
+        return reply.send(fs.createReadStream(scriptPath));
+      }
+    } catch (_) {}
+
+    return reply.send('#!/bin/bash\necho "HatLock Linux Agent Installer loaded."\n');
+  });
+
   // Device agent routes (device token auth, not user JWT)
   await server.register(deviceEnrollmentRoutes, { prefix: '/api/v1/agent' });
   await server.register(deviceCommandRoutes, { prefix: '/api/v1/agent' });

@@ -8,6 +8,19 @@ import { DeviceOS, DeviceStatus, CommandStatus } from '@prisma/client';
 import { logger } from '../lib/logger.js';
 import { auditLog } from '../services/audit.js';
 import { AuditAction } from '@prisma/client';
+import QRCode from 'qrcode';
+
+function getBaseUrl(request: FastifyRequest): string {
+  const forwardedHost = request.headers['x-forwarded-host'];
+  const host = (Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost) || request.headers.host;
+  const forwardedProto = request.headers['x-forwarded-proto'];
+  const proto = (Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto) || (request.protocol === 'https' ? 'https' : 'http');
+
+  if (host && !host.startsWith('localhost') && !host.startsWith('127.0.0.1')) {
+    return `${proto}://${host}`;
+  }
+  return env.API_BASE_URL || 'https://api.luxeenet.com';
+}
 
 export async function appleMdmRoutes(server: FastifyInstance) {
   // --------------------------------------------------------------------------
@@ -20,6 +33,7 @@ export async function appleMdmRoutes(server: FastifyInstance) {
     }
   }, async (request: FastifyRequest<{ Querystring: { deviceId?: string } }>, reply: FastifyReply) => {
     const { deviceId } = request.query;
+    const baseUrl = getBaseUrl(request);
 
     let deviceIdentifier = deviceId || 'DEFAULT_ENROLLMENT';
 
@@ -34,7 +48,7 @@ export async function appleMdmRoutes(server: FastifyInstance) {
             <key>AccessRights</key>
             <integer>8191</integer>
             <key>CheckInURL</key>
-            <string>${env.API_BASE_URL}/api/v1/mdm/apple/checkin</string>
+            <string>${baseUrl}/api/v1/mdm/apple/checkin</string>
             <key>CheckOutWhenRemoved</key>
             <true/>
             <key>IdentityCertificateUUID</key>
@@ -56,7 +70,7 @@ export async function appleMdmRoutes(server: FastifyInstance) {
                 <string>com.apple.mdm.per-user-connections</string>
             </array>
             <key>ServerURL</key>
-            <string>${env.API_BASE_URL}/api/v1/mdm/apple/server</string>
+            <string>${baseUrl}/api/v1/mdm/apple/server</string>
             <key>SignMessage</key>
             <true/>
             <key>Topic</key>
@@ -85,6 +99,29 @@ export async function appleMdmRoutes(server: FastifyInstance) {
     reply.header('Content-Type', 'application/x-apple-aspen-config');
     reply.header('Content-Disposition', 'attachment; filename="hatlock-enroll.mobileconfig"');
     return reply.send(mobileconfig);
+  });
+
+  // Direct PNG stream of Apple MDM Camera-Scannable QR Code
+  server.get('/enroll-qr/:deviceId', {
+    schema: {
+      tags: ['Apple MDM'],
+      summary: 'Direct PNG stream of Apple MDM OTA Enrollment Profile QR code'
+    }
+  }, async (request: FastifyRequest<{ Params: { deviceId: string } }>, reply: FastifyReply) => {
+    const { deviceId } = request.params;
+    const baseUrl = getBaseUrl(request);
+    const appleEnrollUrl = `${baseUrl}/api/v1/mdm/apple/enroll.mobileconfig?deviceId=${deviceId}`;
+
+    const buffer = await QRCode.toBuffer(appleEnrollUrl, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 512,
+      color: { dark: '#000000', light: '#ffffff' }
+    });
+
+    reply.header('Content-Type', 'image/png');
+    reply.header('Cache-Control', 'public, max-age=3600');
+    return reply.send(buffer);
   });
 
   // --------------------------------------------------------------------------

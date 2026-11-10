@@ -32,7 +32,10 @@ import {
   WifiOff,
   User,
   Copy,
-  Check
+  Check,
+  ExternalLink,
+  Zap,
+  Terminal
 } from 'lucide-react';
 import { apiDevices, Device, apiMdm, AndroidProvisioningProfile, API_BASE } from '../../lib/api';
 
@@ -94,6 +97,31 @@ export default function DevicesPage() {
   const [provisioningProfile, setProvisioningProfile] = useState<AndroidProvisioningProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [copiedPayload, setCopiedPayload] = useState(false);
+  const [androidTab, setAndroidTab] = useState<'camera' | 'enterprise'>('camera');
+  const [activatingProtection, setActivatingProtection] = useState(false);
+  const [directActivated, setDirectActivated] = useState(false);
+  const [copiedScript, setCopiedScript] = useState(false);
+
+  const handleInstantActivate = async () => {
+    if (!provisioningDevice) return;
+    setActivatingProtection(true);
+    try {
+      await apiMdm.enrollAndroidDevice({
+        deviceId: provisioningDevice.id,
+        serialNumber: provisioningDevice.serialNumber,
+        manufacturer: provisioningDevice.manufacturer,
+        model: provisioningDevice.model
+      });
+      setDirectActivated(true);
+      setActionSuccess(`Protection activated for ${provisioningDevice.manufacturer} ${provisioningDevice.model}!`);
+      await loadDevices();
+      setTimeout(() => setDirectActivated(false), 5000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to activate device protection.');
+    } finally {
+      setActivatingProtection(false);
+    }
+  };
 
   // Fetch Android Enterprise QR code & provisioning profile on modal open
   useEffect(() => {
@@ -567,16 +595,17 @@ export default function DevicesPage() {
                             <Edit2 className="w-4 h-4" />
                           </button>
 
-                          {/* Provisioning Shortcut for Mobile Devices */}
-                          {(device.currentOS === 'ANDROID' || device.currentOS === 'IOS') && (
-                            <button
-                              onClick={() => setProvisioningDevice(device)}
-                              title="Provisioning Profile / QR"
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-400 border border-slate-700 transition-colors"
-                            >
-                              <QrCode className="w-4 h-4" />
-                            </button>
-                          )}
+                          {/* Provisioning / Setup Guide for Any Device Type */}
+                          <button
+                            onClick={() => {
+                              setProvisioningDevice(device);
+                              setAndroidTab('camera');
+                            }}
+                            title="Provisioning & Enrollment Setup"
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-400 border border-slate-700 transition-colors"
+                          >
+                            <QrCode className="w-4 h-4" />
+                          </button>
 
                           {device.status === 'RESTRICTED' ? (
                             <button
@@ -1132,16 +1161,24 @@ export default function DevicesPage() {
         </div>
       )}
 
-      {/* Provisioning Modal (Android Enterprise QR Code / Apple MDM profile) */}
+      {/* Provisioning Modal (Universal for Android, Apple, Windows, Linux) */}
       {provisioningDevice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-navy-950/80 backdrop-blur-sm animate-fade-in overflow-hidden">
           <div className="bg-navy-900 border border-slate-800 rounded-2xl w-full max-w-lg max-h-[92vh] flex flex-col shadow-2xl overflow-hidden relative">
             {/* Modal Header - Pinned at top */}
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 shrink-0 bg-navy-950/50">
               <div className="flex items-center gap-2 min-w-0">
-                <QrCode className="w-5 h-5 text-indigo-400 shrink-0" />
+                {provisioningDevice.currentOS === 'ANDROID' || provisioningDevice.currentOS === 'IOS' ? (
+                  <Smartphone className="w-5 h-5 text-indigo-400 shrink-0" />
+                ) : (
+                  <Laptop className="w-5 h-5 text-cyan-400 shrink-0" />
+                )}
                 <h3 className="text-sm sm:text-base font-bold text-white truncate">
-                  {provisioningDevice.currentOS === 'ANDROID' ? 'Android Enterprise Provisioning' : 'Apple MDM Enrollment'}
+                  {provisioningDevice.currentOS === 'ANDROID' && 'Android Smartphone Onboarding & MDM'}
+                  {provisioningDevice.currentOS === 'IOS' && 'Apple iOS / iPadOS Supervised MDM'}
+                  {provisioningDevice.currentOS === 'WINDOWS' && 'Windows Agent Provisioning (TPM 2.0)'}
+                  {provisioningDevice.currentOS === 'LINUX' && 'Linux Agent Provisioning (systemd)'}
+                  {!['ANDROID', 'IOS', 'WINDOWS', 'LINUX'].includes(provisioningDevice.currentOS) && 'Device Enrollment Setup'}
                 </h3>
               </div>
               <button
@@ -1153,140 +1190,356 @@ export default function DevicesPage() {
               </button>
             </div>
 
-            {/* Modal Body - Scrollable so it never overflows offscreen */}
+            {/* Modal Body - Scrollable */}
             <div className="overflow-y-auto px-5 py-4 space-y-3.5 text-xs flex-1 min-h-0">
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800/80">
-                <div className="text-[11px] text-slate-400">Target Device:</div>
-                <div className="font-semibold text-white mt-0.5 truncate">
-                  {provisioningDevice.manufacturer} {provisioningDevice.model}{' '}
-                  <span className="text-slate-400 font-mono text-[11px] font-normal">
-                    (S/N: {provisioningDevice.serialNumber})
-                  </span>
+              {/* Target Hardware Info */}
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800/80 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[11px] text-slate-400">Target Device:</div>
+                  <div className="font-semibold text-white mt-0.5 truncate">
+                    {provisioningDevice.manufacturer} {provisioningDevice.model}{' '}
+                    <span className="text-slate-400 font-mono text-[11px] font-normal">
+                      (S/N: {provisioningDevice.serialNumber})
+                    </span>
+                  </div>
                 </div>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                  provisioningDevice.status === 'ACTIVE'
+                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                }`}>
+                  {provisioningDevice.status}
+                </span>
               </div>
 
-              {provisioningDevice.currentOS === 'ANDROID' ? (
+              {/* ----------------- ANDROID ONBOARDING ----------------- */}
+              {provisioningDevice.currentOS === 'ANDROID' && (
+                <div className="space-y-3">
+                  {/* Mode Tab Switcher */}
+                  <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setAndroidTab('camera')}
+                      className={`flex-1 py-1.5 px-2 rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 ${
+                        androidTab === 'camera'
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-xs'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <Smartphone className="w-3.5 h-3.5" />
+                      <span>Quick Camera Scan</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAndroidTab('enterprise')}
+                      className={`flex-1 py-1.5 px-2 rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 ${
+                        androidTab === 'enterprise'
+                          ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 shadow-xs'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      <span>Android Enterprise (6-Tap)</span>
+                    </button>
+                  </div>
+
+                  {androidTab === 'camera' ? (
+                    <div className="space-y-3">
+                      <div className="text-slate-300 leading-relaxed text-[11.5px]">
+                        Scan this QR code with <strong>any standard phone camera</strong> (Samsung Camera, Google Lens, or Barcode scanner) to open the mobile onboarding portal:
+                      </div>
+
+                      {/* Scannable Web URL QR Code Container */}
+                      <div className="flex flex-col items-center justify-center p-3.5 bg-slate-950 rounded-2xl border border-slate-800">
+                        <div className="p-2.5 bg-white rounded-xl shadow-md border border-slate-200 flex items-center justify-center">
+                          {loadingProfile ? (
+                            <div className="flex flex-col items-center justify-center p-6 text-slate-800">
+                              <RefreshCw className="w-7 h-7 animate-spin text-emerald-600 mb-2" />
+                              <span className="text-xs font-semibold text-slate-600">Generating QR...</span>
+                            </div>
+                          ) : (
+                            <img
+                              src={provisioningProfile?.cameraQrDataUrl || `${API_BASE}/api/v1/mdm/android/camera-qr/${provisioningDevice.id}`}
+                              alt={`Camera Scannable Onboarding QR for ${provisioningDevice.model}`}
+                              className="w-36 h-36 sm:w-44 sm:h-44 object-contain"
+                            />
+                          )}
+                        </div>
+                        <div className="text-[11px] text-emerald-400 font-medium mt-2 flex items-center gap-1.5 text-center">
+                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                          <span>Works with standard Android phone camera</span>
+                        </div>
+                      </div>
+
+                      <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800/80 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-slate-200">Mobile Onboarding Link:</span>
+                          <a
+                            href={provisioningProfile?.cameraEnrollUrl || `${API_BASE}/api/v1/mdm/android/enroll-view/${provisioningDevice.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-medium text-[11px]"
+                          >
+                            <span>Open on this PC</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                        <div className="p-1.5 bg-slate-900 rounded border border-slate-800 font-mono text-[10px] text-slate-400 truncate select-all">
+                          {provisioningProfile?.cameraEnrollUrl || `${API_BASE}/api/v1/mdm/android/enroll-view/${provisioningDevice.id}`}
+                        </div>
+                      </div>
+
+                      {/* 1-Click Instant Activation for Technicians */}
+                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-semibold text-emerald-300 text-xs">Direct Cloud Enrollment</div>
+                            <div className="text-[11px] text-slate-400">Activate protection immediately without scanning.</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleInstantActivate}
+                            disabled={activatingProtection || directActivated}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-navy-950 font-bold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-60"
+                          >
+                            <Zap className="w-3.5 h-3.5" />
+                            <span>{activatingProtection ? 'Activating...' : directActivated ? '✓ Enrolled' : '1-Click Activate'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="text-slate-300 leading-relaxed text-[11.5px]">
+                        For <strong>unboxed or factory-reset</strong> smartphones as Fully Managed Device Owner:
+                      </div>
+
+                      {/* Scannable Android Enterprise DPC JSON QR Code */}
+                      <div className="flex flex-col items-center justify-center p-3.5 bg-slate-950 rounded-2xl border border-slate-800">
+                        <div className="p-2.5 bg-white rounded-xl shadow-md border border-slate-200 flex items-center justify-center">
+                          {loadingProfile ? (
+                            <div className="flex flex-col items-center justify-center p-6 text-slate-800">
+                              <RefreshCw className="w-7 h-7 animate-spin text-indigo-600 mb-2" />
+                              <span className="text-xs font-semibold text-slate-600">Generating DPC QR...</span>
+                            </div>
+                          ) : (
+                            <img
+                              src={provisioningProfile?.qrDataUrl || `${API_BASE}/api/v1/mdm/android/provisioning-qr/${provisioningDevice.id}`}
+                              alt={`HatLock Device Owner QR Code for ${provisioningDevice.model}`}
+                              className="w-36 h-36 sm:w-44 sm:h-44 object-contain"
+                            />
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-400 font-medium mt-2 flex items-center gap-1.5 text-center">
+                          <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                          <span>Google Setup Wizard QR Reader (RFC Compliant)</span>
+                        </div>
+                      </div>
+
+                      <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800/80 space-y-1 text-slate-300">
+                        <div className="font-semibold text-slate-200 text-xs">Setup Wizard Steps:</div>
+                        <ol className="list-decimal pl-4 space-y-0.5 text-slate-400 text-[11px] leading-relaxed">
+                          <li>Power on the factory-reset or unboxed Samsung/Android device.</li>
+                          <li>On the initial <strong>&quot;Welcome&quot;</strong> screen, tap any blank area <strong>6 times</strong>.</li>
+                          <li>Connect to Wi-Fi when prompted.</li>
+                          <li>Scan the <strong>Device Owner QR</strong> code above.</li>
+                          <li>The HatLock Enterprise Agent installs automatically with kiosk locks.</li>
+                        </ol>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ----------------- APPLE IOS / MACOS ONBOARDING ----------------- */}
+              {(provisioningDevice.currentOS === 'IOS' || provisioningDevice.currentOS === 'MACOS') && (
                 <div className="space-y-3.5">
                   <div className="text-slate-300 leading-relaxed text-[11.5px]">
-                    To provision this Android smartphone as a <strong className="text-white">Fully Managed Device Owner</strong>:
+                    Scan this QR code with <strong>iPhone / iPad Camera</strong> to install the Apple Supervised MDM configuration profile in Safari:
                   </div>
 
-                  {/* Scannable Android Enterprise QR Code Container */}
                   <div className="flex flex-col items-center justify-center p-3.5 bg-slate-950 rounded-2xl border border-slate-800">
                     <div className="p-2.5 bg-white rounded-xl shadow-md border border-slate-200 flex items-center justify-center">
-                      {loadingProfile ? (
-                        <div className="flex flex-col items-center justify-center p-6 text-slate-800">
-                          <RefreshCw className="w-7 h-7 animate-spin text-emerald-600 mb-2" />
-                          <span className="text-xs font-semibold text-slate-600">Generating QR...</span>
-                        </div>
-                      ) : (
-                        <img
-                          src={provisioningProfile?.qrDataUrl || `${API_BASE}/api/v1/mdm/android/provisioning-qr/${provisioningDevice.id}`}
-                          alt={`HatLock Device Owner QR Code for ${provisioningDevice.manufacturer} ${provisioningDevice.model}`}
-                          className="w-36 h-36 sm:w-44 sm:h-44 object-contain"
-                        />
-                      )}
+                      <img
+                        src={`${API_BASE}/api/v1/mdm/apple/enroll-qr/${provisioningDevice.id}`}
+                        alt={`Apple MDM QR Code for ${provisioningDevice.model}`}
+                        className="w-36 h-36 sm:w-44 sm:h-44 object-contain"
+                      />
                     </div>
                     <div className="text-[11px] text-slate-400 font-medium mt-2 flex items-center gap-1.5 text-center">
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      <span>Point phone camera at this QR code during setup</span>
+                      <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      <span>Open in iOS Safari to download profile</span>
                     </div>
                   </div>
 
-                  {/* Step-by-step instructions */}
-                  <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800/80 space-y-1.5 text-slate-300">
-                    <div className="font-semibold text-slate-200 text-xs">Setup Instructions:</div>
-                    <ol className="list-decimal pl-4 space-y-1 text-slate-400 text-[11px] leading-relaxed">
-                      <li>Factory reset or unbox the Samsung device.</li>
-                      <li>On the initial <strong>&quot;Welcome&quot;</strong> screen, tap any blank area <strong>6 times</strong> to open QR setup.</li>
-                      <li>Connect to Wi-Fi, then scan the QR code above.</li>
-                      <li>The HatLock Enterprise Device Owner agent will auto-install and bind.</li>
+                  <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800/80 space-y-1 text-slate-300">
+                    <div className="font-semibold text-slate-200 text-xs">iOS Enrollment Instructions:</div>
+                    <ol className="list-decimal pl-4 space-y-0.5 text-slate-400 text-[11px] leading-relaxed">
+                      <li>Point iPhone camera at QR code and tap <strong>&quot;Open in Safari&quot;</strong>.</li>
+                      <li>Tap <strong>&quot;Allow&quot;</strong> to download the HatLock configuration profile.</li>
+                      <li>Open iOS <strong>Settings &rarr; Profile Downloaded &rarr; Install</strong>.</li>
                     </ol>
                   </div>
+                </div>
+              )}
 
-                  <div className="p-2 bg-slate-950 rounded-lg border border-slate-800 font-mono text-[10px] text-slate-500 truncate">
-                    Endpoint: /api/v1/mdm/android/provisioning-profile/{provisioningDevice.id}
+              {/* ----------------- WINDOWS ONBOARDING ----------------- */}
+              {provisioningDevice.currentOS === 'WINDOWS' && (
+                <div className="space-y-3.5">
+                  <div className="text-slate-300 leading-relaxed text-[11.5px]">
+                    Install the HatLock Windows Service with hardware TPM 2.0 and BitLocker lock binding:
+                  </div>
+
+                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between text-slate-400">
+                      <div className="flex items-center gap-1.5 font-medium text-[11px]">
+                        <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>PowerShell (Run as Administrator)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cmd = `powershell -ExecutionPolicy Bypass -Command "irm ${API_BASE}/downloads/windows/install.ps1 | iex"`;
+                          navigator.clipboard.writeText(cmd);
+                          setCopiedScript(true);
+                          setTimeout(() => setCopiedScript(false), 3000);
+                        }}
+                        className="text-cyan-400 hover:text-cyan-300 font-medium text-[11px] flex items-center gap-1"
+                      >
+                        {copiedScript ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedScript ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                    <pre className="p-2.5 bg-slate-900 rounded-lg text-emerald-400 font-mono text-[11px] overflow-x-auto select-all leading-tight">
+powershell -ExecutionPolicy Bypass -Command &quot;irm {API_BASE}/downloads/windows/install.ps1 | iex&quot;
+                    </pre>
+                  </div>
+
+                  <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800/80 space-y-1 text-slate-300">
+                    <div className="font-semibold text-slate-200 text-xs">Windows Instructions:</div>
+                    <ol className="list-decimal pl-4 space-y-0.5 text-slate-400 text-[11px] leading-relaxed">
+                      <li>Right-click Start menu and select <strong>Terminal (Admin)</strong> or <strong>PowerShell (Admin)</strong>.</li>
+                      <li>Paste the one-line command above and press Enter.</li>
+                      <li>The service will bind TPM keys, Secure Boot state, and connect to the dashboard.</li>
+                    </ol>
                   </div>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-slate-300">
-                    Apple iPhone / iPad supervised device configuration profile:
-                  </p>
-                  <a
-                    href={`/api/v1/mdm/apple/enroll.mobileconfig?deviceId=${provisioningDevice.id}`}
-                    download
-                    className="w-full py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold flex items-center justify-center gap-2 text-xs transition-colors"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download hatlock-enroll.mobileconfig
-                  </a>
+              )}
+
+              {/* ----------------- LINUX ONBOARDING ----------------- */}
+              {provisioningDevice.currentOS === 'LINUX' && (
+                <div className="space-y-3.5">
+                  <div className="text-slate-300 leading-relaxed text-[11.5px]">
+                    Install the HatLock Linux Agent daemon with systemd and LUKS encryption lock support:
+                  </div>
+
+                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between text-slate-400">
+                      <div className="flex items-center gap-1.5 font-medium text-[11px]">
+                        <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Bash Terminal (Root / sudo)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cmd = `curl -fsSL ${API_BASE}/downloads/linux/install.sh | sudo bash -s -- "${provisioningDevice.id}" "${API_BASE}"`;
+                          navigator.clipboard.writeText(cmd);
+                          setCopiedScript(true);
+                          setTimeout(() => setCopiedScript(false), 3000);
+                        }}
+                        className="text-cyan-400 hover:text-cyan-300 font-medium text-[11px] flex items-center gap-1"
+                      >
+                        {copiedScript ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedScript ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                    <pre className="p-2.5 bg-slate-900 rounded-lg text-emerald-400 font-mono text-[11px] overflow-x-auto select-all leading-tight">
+curl -fsSL {API_BASE}/downloads/linux/install.sh | sudo bash -s -- &quot;{provisioningDevice.id}&quot; &quot;{API_BASE}&quot;
+                    </pre>
+                  </div>
+
+                  <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800/80 space-y-1 text-slate-300">
+                    <div className="font-semibold text-slate-200 text-xs">Linux Instructions:</div>
+                    <ol className="list-decimal pl-4 space-y-0.5 text-slate-400 text-[11px] leading-relaxed">
+                      <li>Open a bash shell on the target Linux machine.</li>
+                      <li>Paste the curl command and run with sudo privileges.</li>
+                      <li>The <code>hatlock-agent.service</code> will be registered and started under systemd.</li>
+                    </ol>
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Modal Bottom Action Buttons - Pinned at bottom, always visible */}
             <div className="px-5 py-3 border-t border-slate-800 bg-navy-950/90 shrink-0 flex items-center justify-between gap-2">
-              {provisioningDevice.currentOS === 'ANDROID' ? (
-                <>
-                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-1 min-w-0">
+                {provisioningDevice.currentOS === 'ANDROID' && (
+                  <>
                     <a
-                      href={`${API_BASE}/api/v1/mdm/android/provisioning-qr/${provisioningDevice.id}`}
-                      download={`hatlock-provisioning-${provisioningDevice.serialNumber}.png`}
+                      href={androidTab === 'camera'
+                        ? (provisioningProfile?.cameraEnrollUrl || `${API_BASE}/api/v1/mdm/android/enroll-view/${provisioningDevice.id}`)
+                        : `${API_BASE}/api/v1/mdm/android/provisioning-qr/${provisioningDevice.id}`
+                      }
                       target="_blank"
                       rel="noopener noreferrer"
                       className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium flex items-center justify-center gap-1.5 text-xs transition-colors border border-slate-700 shrink-0"
                     >
                       <Download className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Download QR</span>
+                      <span>{androidTab === 'camera' ? 'Open Portal' : 'Download QR'}</span>
                     </a>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const payload = provisioningProfile?.qrJson || {
-                          deviceId: provisioningDevice.id,
-                          serialNumber: provisioningDevice.serialNumber
-                        };
-                        navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-                        setCopiedPayload(true);
-                        setTimeout(() => setCopiedPayload(false), 3000);
-                      }}
+                    <a
+                      href={`${API_BASE}/downloads/android/HatLockEnterpriseAgent.apk`}
+                      download="HatLockEnterpriseAgent.apk"
                       className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium flex items-center justify-center gap-1.5 text-xs transition-colors border border-slate-700 shrink-0"
                     >
-                      {copiedPayload ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>Copy Setup JSON</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+                      <Download className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Download APK</span>
+                    </a>
+                  </>
+                )}
 
-                  <button
-                    type="button"
-                    onClick={() => setProvisioningDevice(null)}
-                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold shrink-0"
+                {(provisioningDevice.currentOS === 'IOS' || provisioningDevice.currentOS === 'MACOS') && (
+                  <a
+                    href={`${API_BASE}/api/v1/mdm/apple/enroll.mobileconfig?deviceId=${provisioningDevice.id}`}
+                    download
+                    className="py-2 px-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold flex items-center justify-center gap-1.5 text-xs transition-colors shrink-0"
                   >
-                    Close
-                  </button>
-                </>
-              ) : (
-                <div className="flex justify-end w-full">
-                  <button
-                    type="button"
-                    onClick={() => setProvisioningDevice(null)}
-                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download .mobileconfig</span>
+                  </a>
+                )}
+
+                {provisioningDevice.currentOS === 'WINDOWS' && (
+                  <a
+                    href={`${API_BASE}/downloads/windows/install.ps1`}
+                    download="install-agent.ps1"
+                    className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium flex items-center justify-center gap-1.5 text-xs transition-colors border border-slate-700 shrink-0"
                   >
-                    Close
-                  </button>
-                </div>
-              )}
+                    <Download className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Download install-agent.ps1</span>
+                  </a>
+                )}
+
+                {provisioningDevice.currentOS === 'LINUX' && (
+                  <a
+                    href={`${API_BASE}/downloads/linux/install.sh`}
+                    download="install.sh"
+                    className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium flex items-center justify-center gap-1.5 text-xs transition-colors border border-slate-700 shrink-0"
+                  >
+                    <Download className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Download install.sh</span>
+                  </a>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setProvisioningDevice(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold shrink-0"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

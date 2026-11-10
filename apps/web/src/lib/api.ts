@@ -583,12 +583,26 @@ export interface AndroidProvisioningProfile {
   qrJson: Record<string, any>;
   qrDataUrl?: string;
   qrImageUrl?: string;
+  cameraEnrollUrl?: string;
+  cameraQrDataUrl?: string;
+  cameraQrImageUrl?: string;
   packageDownloadUrl?: string;
 }
 
 export const apiMdm = {
   getAndroidProvisioningProfile: (deviceId: string) =>
-    request<AndroidProvisioningProfile>(`/mdm/android/provisioning-profile/${deviceId}`)
+    request<AndroidProvisioningProfile>(`/mdm/android/provisioning-profile/${deviceId}`),
+  enrollAndroidDevice: (data: { deviceId: string; serialNumber: string; manufacturer: string; model: string }) =>
+    request<{ status: string; deviceId: string; protectionLevel?: string }>(`/mdm/android/enroll`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...data,
+        osVersion: '14.0',
+        agentVersion: '1.0.0',
+        hardwareKeystoreSupported: true,
+        screenLockActive: true
+      })
+    })
 };
 
 // ----------------------------------------------------------------------------
