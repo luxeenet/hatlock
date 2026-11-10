@@ -275,7 +275,7 @@ export async function deviceRoutes(server: FastifyInstance) {
         },
         userId
       );
-      return reply.send({ status: 'COMMAND_DISPATCHED', command });
+      return reply.send({ status: 'COMMAND_DISPATCHED', command, commandId: command.id });
     } else {
       const command = await issueUnrestrictionCommand(
         device.id,
@@ -286,7 +286,7 @@ export async function deviceRoutes(server: FastifyInstance) {
         agreementNumber,
         userId
       );
-      return reply.send({ status: 'COMMAND_DISPATCHED', command });
+      return reply.send({ status: 'COMMAND_DISPATCHED', command, commandId: command.id });
     }
   });
 

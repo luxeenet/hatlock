@@ -1,4 +1,4 @@
-﻿# ==============================================================================
+# ==============================================================================
 # HatLock Windows Security — Interactive User Session Client Companion
 # Runs in the active user desktop session (Session 1+) to render the lock overlay
 # Solves Session 0 Isolation cleanly across all Windows desktop versions
@@ -54,3 +54,4 @@ while ($true) {
 
     Start-Sleep -Seconds 3
 }
+

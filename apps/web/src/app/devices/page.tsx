@@ -278,8 +278,10 @@ export default function DevicesPage() {
             : 'Account in good standing. Lock released.'
       });
 
+      const rawCmdId = res?.commandId || res?.command?.id || '';
+      const shortId = typeof rawCmdId === 'string' && rawCmdId.length >= 8 ? ` (ID: ${rawCmdId.slice(0, 8)})` : '';
       setActionSuccess(
-        `Signed ${commandType} command queued (ID: ${res.commandId.slice(0, 8)}). Next agent heartbeat will enforce policy.`
+        `Signed ${commandType} command queued${shortId}. Policy is now queued for device enforcement.`
       );
       setCommandModalOpen(false);
       await loadDevices();

@@ -1,4 +1,4 @@
-﻿# ==============================================================================
+# ==============================================================================
 # HatLock Windows Protection Agent — Hardened Universal Installer
 # Developed by Luxeenet for HatLock PRO
 #

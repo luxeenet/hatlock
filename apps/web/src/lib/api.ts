@@ -202,7 +202,7 @@ export const apiDevices = {
     body: JSON.stringify(data)
   }),
   sendCommand: (deviceId: string, data: { action: 'RESTRICT' | 'RESTORE'; reason: string; lockScreenMessage?: string }) =>
-    request<{ commandId: string; action: string; status: string }>(`/devices/${deviceId}/command`, {
+    request<{ commandId?: string; command?: { id: string }; status: string }>(`/devices/${deviceId}/command`, {
       method: 'POST',
       body: JSON.stringify(data)
     }),
