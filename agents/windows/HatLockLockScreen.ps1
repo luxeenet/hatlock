@@ -1,4 +1,4 @@
-﻿# ==============================================================================
+# ==============================================================================
 # HatLock Windows Security — Topmost Lock Screen Overlay Window
 # Developed by Luxeenet for HatLock PRO Universal Fleet Protection
 # ==============================================================================
@@ -143,3 +143,4 @@ $dispatcherTimer.add_Tick({
 $dispatcherTimer.Start()
 
 [void]$window.ShowDialog()
+

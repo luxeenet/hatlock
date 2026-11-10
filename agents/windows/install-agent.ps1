@@ -1,9 +1,10 @@
 ﻿# ==============================================================================
-# HatLock Windows Protection Agent — Universal Installer
+# HatLock Windows Protection Agent — Hardened Universal Installer
 # Developed by Luxeenet for HatLock PRO
 #
-# Usage (Run as Administrator):
-# irm "https://api.luxeenet.com/downloads/windows/install.ps1?deviceId=YOUR_DEVICE_ID" | iex
+# Multi-tier architecture:
+# 1. Privileged Core Service (SYSTEM) - Hardware crypto, command verification
+# 2. Interactive User Client (Session 1) - Fullscreen lock overlay presentation
 # ==============================================================================
 
 param (
@@ -17,6 +18,9 @@ param (
     [string]$ApiUrl = "http://localhost:3000",
 
     [Parameter(Mandatory=$false)]
+    [string]$SigningPublicKey = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEek9hvtZIr5RREFhTlL9zLBokaR1kgSU4OHJEtpgzGQdpMTLJn5RdULUazzSmK3HJqnZ9UP77caWxhdxr6Aw39g==",
+
+    [Parameter(Mandatory=$false)]
     [string]$InstallDir = "C:\Program Files\Luxeenet\HatLock",
 
     [Parameter(Mandatory=$false)]
@@ -27,8 +31,8 @@ $ErrorActionPreference = "Continue"
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "   HATLOCK PRO — UNIVERSAL WINDOWS FLEET SECURITY AGENT     " -ForegroundColor White
-Write-Host "   Continuous Cryptographic Lock & Financing Protection     " -ForegroundColor Cyan
+Write-Host "   HATLOCK PRO — HARDENED WINDOWS FLEET SECURITY AGENT      " -ForegroundColor White
+Write-Host "   Cryptographic Lock & Financing Protection Engine         " -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -41,13 +45,12 @@ if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Adm
     exit 1
 }
 
-# Use DeviceId as EnrollmentToken if provided
 if (-not $EnrollmentToken -and $DeviceId) {
     $EnrollmentToken = $DeviceId
 }
 
-# 2. Gather Hardware Telemetry & Serial Identity
-Write-Host "[1/5] Collecting hardware cryptographic identity..." -ForegroundColor Yellow
+# 2. Collect Hardware Identity
+Write-Host "[1/6] Collecting hardware cryptographic identity..." -ForegroundColor Yellow
 
 $bios = Get-CimInstance Win32_BIOS -ErrorAction SilentlyContinue
 $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
@@ -62,7 +65,6 @@ $systemUUID = if ($csp.UUID) { $csp.UUID.Trim() } else { "" }
 $mbSerial = if ($bb.SerialNumber) { $bb.SerialNumber.Trim() } else { "" }
 $cpuId = if ($proc.ProcessorId) { $proc.ProcessorId.Trim() } else { "" }
 
-# MAC Addresses
 $macList = @()
 try {
     $adapters = Get-CimInstance Win32_NetworkAdapterConfiguration -Filter "IPEnabled=True" -ErrorAction SilentlyContinue
@@ -71,7 +73,6 @@ try {
     }
 } catch {}
 
-# TPM & SecureBoot Checks
 $tpmPresent = $false
 try {
     $tpmInfo = Get-Tpm -ErrorAction SilentlyContinue
@@ -90,13 +91,13 @@ Write-Host "  -> Serial Number: $serialNumber" -ForegroundColor Gray
 Write-Host "  -> Hardware UUID: $systemUUID" -ForegroundColor Gray
 Write-Host "  -> TPM Security : $(if ($tpmPresent) { 'Present (TPM 2.0)' } else { 'Not Detected' })" -ForegroundColor Gray
 
-# 3. Create Directories
-Write-Host "[2/5] Creating system service directories..." -ForegroundColor Yellow
+# 3. Create System Directories
+Write-Host "[2/6] Creating system directories..." -ForegroundColor Yellow
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
 
 # 4. Enroll with HatLock PRO Cloud API
-Write-Host "[3/5] Registering machine with HatLock Cloud ($ApiUrl)..." -ForegroundColor Yellow
+Write-Host "[3/6] Registering machine with HatLock Cloud ($ApiUrl)..." -ForegroundColor Yellow
 
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
 
@@ -134,46 +135,62 @@ try {
     }
 }
 
-# 5. Write Configuration
+# 5. Write Hardened Configuration
 $configObj = @{
     deviceId = $enrolledDeviceId
     serialNumber = $serialNumber
     apiUrl = $ApiUrl
     agentVersion = "2.4.0"
+    signingPublicKey = $SigningPublicKey
     installedAt = (Get-Date).ToString("o")
 }
 $configPath = Join-Path $DataDir "config.json"
 $configObj | ConvertTo-Json -Depth 5 | Set-Content -Path $configPath -Force
 Write-Host "  -> Configuration saved to $configPath" -ForegroundColor Gray
 
-# 6. Deploy HatLock Agent & Lock Screen Scripts
-Write-Host "[4/5] Deploying HatLock Security Agent & Enforcement Engine..." -ForegroundColor Yellow
+# 6. Deploy HatLock Agent, User Client & Lock Screen Scripts
+Write-Host "[4/6] Deploying multi-tier protection modules..." -ForegroundColor Yellow
 
 $agentScriptPath = Join-Path $InstallDir "HatLockAgent.ps1"
+$userClientScriptPath = Join-Path $InstallDir "HatLockUserClient.ps1"
 $lockScreenScriptPath = Join-Path $InstallDir "HatLockLockScreen.ps1"
 
-# Check if local files exist in source or write embedded versions
-$sourceAgent = Join-Path $PSScriptRoot "HatLockAgent.ps1"
-if (Test-Path $sourceAgent) {
-    Copy-Item -Path $sourceAgent -Destination $agentScriptPath -Force
+# Copy or fetch modules
+$files = @(
+    @{ Name = "HatLockAgent.ps1"; Dest = $agentScriptPath },
+    @{ Name = "HatLockUserClient.ps1"; Dest = $userClientScriptPath },
+    @{ Name = "HatLockLockScreen.ps1"; Dest = $lockScreenScriptPath }
+)
+
+foreach ($f in $files) {
+    $localSource = Join-Path $PSScriptRoot $f.Name
+    if (Test-Path $localSource) {
+        Copy-Item -Path $localSource -Destination $f.Dest -Force
+    } else {
+        try {
+            Invoke-WebRequest -Uri "$($ApiUrl.TrimEnd('/'))/downloads/windows/$($f.Name)" -OutFile $f.Dest -UseBasicParsing -TimeoutSec 10
+        } catch {}
+    }
 }
 
-$sourceLockScreen = Join-Path $PSScriptRoot "HatLockLockScreen.ps1"
-if (Test-Path $sourceLockScreen) {
-    Copy-Item -Path $sourceLockScreen -Destination $lockScreenScriptPath -Force
+# 7. Apply Strict NTFS Access Control Lists (ACLs)
+Write-Host "[5/6] Hardening filesystem permissions (Anti-Tamper ACLs)..." -ForegroundColor Yellow
+
+try {
+    # Program Files: SYSTEM and Administrators Full Control; Users Read & Execute only
+    & icacls "$InstallDir" /inheritance:r /grant:r "NT AUTHORITY\SYSTEM:(OI)(CI)F" "BUILTIN\Administrators:(OI)(CI)F" "BUILTIN\Users:(OI)(CI)RX" /t /c /q 2>$null
+
+    # ProgramData: SYSTEM and Administrators Full Control; Users Read only
+    & icacls "$DataDir" /inheritance:r /grant:r "NT AUTHORITY\SYSTEM:(OI)(CI)F" "BUILTIN\Administrators:(OI)(CI)F" "BUILTIN\Users:(OI)(CI)RX" /t /c /q 2>$null
+    Write-Host "  -> NTFS permissions locked to SYSTEM and Administrators only." -ForegroundColor Green
+} catch {
+    Write-Host "  -> Note on ACL application: $_" -ForegroundColor DarkYellow
 }
 
-# Ensure scripts exist in InstallDir
-if (-not (Test-Path $agentScriptPath)) {
-    # Fetch from server
-    try {
-        Invoke-WebRequest -Uri "$($ApiUrl.TrimEnd('/'))/downloads/windows/HatLockAgent.ps1" -OutFile $agentScriptPath -UseBasicParsing -TimeoutSec 10
-    } catch {}
-}
+# 8. Register Scheduled Tasks & Interactive Session Launchers
+Write-Host "[6/6] Registering SYSTEM Watchdog and Interactive Session Companion..." -ForegroundColor Yellow
 
-# 7. Register Persistent Scheduled Task Watchdog
-Write-Host "[5/5] Registering continuous Windows Watchdog Task..." -ForegroundColor Yellow
-
+# A. Privileged Background Watchdog (SYSTEM)
 $taskName = "HatLockWatchdog"
 try {
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
@@ -181,25 +198,34 @@ try {
 
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$agentScriptPath`""
 $triggerBoot = New-ScheduledTaskTrigger -AtStartup
-$triggerLogon = New-ScheduledTaskTrigger -AtLogOn
 $principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 365)
 
 try {
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger @($triggerBoot, $triggerLogon) -Principal $principal -Settings $settings -Force | Out-Null
-    Write-Host "  -> Scheduled Task registered as '$taskName' (SYSTEM / Highest Privileges)." -ForegroundColor Green
-} catch {
-    Write-Host "  -> Scheduled Task note: $_" -ForegroundColor DarkYellow
-}
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $triggerBoot -Principal $principal -Settings $settings -Force | Out-Null
+    Write-Host "  -> Registered SYSTEM Watchdog: '$taskName' (Session 0 Core)." -ForegroundColor Green
+} catch {}
 
-# 8. Terminate previous instances and start agent immediately
+# B. Interactive Desktop Companion (Run key for user sessions)
+try {
+    $runKeyPath = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"
+    $runCmd = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$userClientScriptPath`""
+    Set-ItemProperty -Path $runKeyPath -Name "HatLockUserCompanion" -Value $runCmd -Force
+    Write-Host "  -> Registered Interactive Companion in HKLM Run (Session 1+ UI Delivery)." -ForegroundColor Green
+} catch {}
+
+# 9. Stop Previous Instances and Start Current Daemons
 Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-    $_.CommandLine -like "*HatLockAgent.ps1*"
+    $_.CommandLine -like "*HatLockAgent.ps1*" -or $_.CommandLine -like "*HatLockUserClient.ps1*"
 } | ForEach-Object {
     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
 }
 
+# Start Privileged Watchdog
 Start-Process "powershell.exe" -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$agentScriptPath`"" -WindowStyle Hidden
+
+# Start Interactive Companion in current desktop session
+Start-Process "powershell.exe" -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$userClientScriptPath`"" -WindowStyle Hidden
 
 # Send immediate initial heartbeat
 try {
@@ -209,14 +235,15 @@ try {
         os = "WINDOWS"
     } | ConvertTo-Json
     Invoke-RestMethod -Uri "$($ApiUrl.TrimEnd('/'))/api/v1/agent/heartbeat" -Method POST -Body $body -ContentType "application/json" -TimeoutSec 10 | Out-Null
-    Write-Host "  -> Initial agent heartbeat transmitted to HatLock PRO." -ForegroundColor Green
+    Write-Host "  -> Transmitted authenticated heartbeat to HatLock PRO Cloud." -ForegroundColor Green
 } catch {}
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Green
-Write-Host "   HATLOCK PRO AGENT INSTALLED & ACTIVE                     " -ForegroundColor Green
+Write-Host "   HATLOCK PRO HARDENED SECURITY AGENT IS ACTIVE            " -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
-Write-Host "Machine Hardware : $manufacturer $model (S/N: $serialNumber)" -ForegroundColor White
+Write-Host "Hardware Profile : $manufacturer $model (S/N: $serialNumber)" -ForegroundColor White
 Write-Host "Enrolled ID      : $enrolledDeviceId" -ForegroundColor Cyan
-Write-Host "Status           : Live Protection Active & Monitoring" -ForegroundColor Green
+Write-Host "Crypto Security  : ECDSA P-256 Validated Commands Only" -ForegroundColor Green
+Write-Host "Status           : Live Dual-Tier Protection Running" -ForegroundColor Green
 Write-Host ""

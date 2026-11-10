@@ -281,6 +281,17 @@ async function buildServer() {
           );
         }
 
+        // Extract SPKI Base64 string from PEM public key
+        const pubKeySpki = env.COMMAND_SIGNING_PUBLIC_KEY
+          .replace(/-----BEGIN PUBLIC KEY-----/, '')
+          .replace(/-----END PUBLIC KEY-----/, '')
+          .replace(/\s+/g, '');
+
+        content = content.replace(
+          /\[string\]\$SigningPublicKey\s*=\s*"[^"]*"/,
+          `[string]$SigningPublicKey = "${pubKeySpki}"`
+        );
+
         return reply.send(content);
       }
     } catch (err: any) {
@@ -288,6 +299,23 @@ async function buildServer() {
     }
 
     return reply.send('# HatLock Windows Agent Installer\nWrite-Host "HatLock Agent Installer loaded." -ForegroundColor Cyan\n');
+  });
+
+  // Windows Interactive User Client Companion Download
+  server.get('/downloads/windows/HatLockUserClient.ps1', async (request, reply) => {
+    reply.header('Content-Type', 'text/plain; charset=utf-8');
+    reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const scriptPath = path.resolve(process.cwd(), '../../agents/windows/HatLockUserClient.ps1');
+      if (fs.existsSync(scriptPath)) {
+        return reply.send(fs.createReadStream(scriptPath));
+      }
+    } catch (_) {}
+
+    return reply.send('# HatLock Windows User Companion\n');
   });
 
   // Windows Agent Daemon Script Download

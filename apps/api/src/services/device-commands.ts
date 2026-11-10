@@ -251,7 +251,7 @@ export async function issueUnrestrictionCommand(
 
 export async function getPendingCommands(deviceId: string) {
   const now = new Date();
-  return prisma.deviceCommand.findMany({
+  const commands = await prisma.deviceCommand.findMany({
     where: {
       deviceId,
       status: CommandStatus.PENDING,
@@ -259,6 +259,16 @@ export async function getPendingCommands(deviceId: string) {
     },
     orderBy: { issuedAt: 'asc' }
   });
+
+  return commands.map(cmd => ({
+    ...cmd,
+    canonical: JSON.stringify({
+      deviceId: cmd.deviceId,
+      nonce: cmd.nonce,
+      expiresAt: cmd.expiresAt.toISOString(),
+      payload: cmd.payload
+    })
+  }));
 }
 
 // ─── Acknowledge Command Execution ────────────────────────────────────────────
