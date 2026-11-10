@@ -58,7 +58,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   // Close mobile sidebar on route transition
   useEffect(() => {
     setIsMobileMenuOpen(false);
+    setIsProfileMenuOpen(false);
   }, [pathname]);
+
+  // Profile Dropdown State (Instagram-style header icon)
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   // Notification Drawer State
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -167,11 +172,14 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     setAuthChecked(true);
   }, [pathname, router]);
 
-  // Click outside to close notifications
+  // Click outside to close notifications & profile dropdown
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setIsNotificationsOpen(false);
+      }
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -302,9 +310,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
       {/* Sidebar (Responsive drawer on mobile, fixed left on lg+) */}
       <aside
-        className={`w-64 border-r border-slate-800/90 bg-[#0f172a] flex flex-col fixed inset-y-0 z-50 transition-transform duration-300 ease-in-out lg:translate-x-0 ${
-          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`w-64 border-r border-slate-800/90 bg-[#0f172a] flex flex-col fixed inset-y-0 z-50 transition-transform duration-300 ease-in-out lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
       >
         <div className="p-4 sm:p-5 border-b border-slate-800/90 flex items-center justify-between bg-[#0b0f19]/60">
           <div className="flex items-center gap-3">
@@ -344,11 +351,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 key={item.href}
                 href={item.href}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`flex items-center gap-3 py-2 px-3 transition-all ${
-                  isActive
+                className={`flex items-center gap-3 py-2 px-3 transition-all ${isActive
                     ? 'bg-slate-800/70 text-white font-medium border-l-2 border-emerald-400 rounded-r-lg shadow-sm'
                     : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/40 rounded-lg'
-                }`}
+                  }`}
               >
                 <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-emerald-400' : item.color}`} />
                 <span className="truncate">{item.label}</span>
@@ -368,11 +374,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                   key={item.href}
                   href={item.href}
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 py-2 px-3 transition-all ${
-                    isActive
+                  className={`flex items-center gap-3 py-2 px-3 transition-all ${isActive
                       ? 'bg-slate-800/70 text-white font-medium border-l-2 border-emerald-400 rounded-r-lg shadow-sm'
                       : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/40 rounded-lg'
-                  }`}
+                    }`}
                 >
                   <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-emerald-400' : item.color}`} />
                   <span className="truncate">{item.label}</span>
@@ -390,11 +395,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               <Link
                 href="/super-admin"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`flex items-center gap-3 py-2 px-3 transition-all ${
-                  pathname === '/super-admin'
+                className={`flex items-center gap-3 py-2 px-3 transition-all ${pathname === '/super-admin'
                     ? 'bg-amber-500/10 text-amber-300 font-medium border-l-2 border-amber-400 rounded-r-lg shadow-sm'
                     : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/40 rounded-lg'
-                }`}
+                  }`}
               >
                 <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
                 <span className="truncate">Super-Admin</span>
@@ -403,25 +407,30 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           )}
         </nav>
 
-        {/* Bottom user badge with direct link to profile */}
+        {/* Bottom user badge with Instagram-style avatar and direct link to profile */}
         <div className="p-3 border-t border-slate-800/90 bg-[#0b0f19]/70">
           <div className="flex items-center justify-between">
             <Link
               href="/profile"
               onClick={() => setIsMobileMenuOpen(false)}
               title="Manage Profile & Settings"
-              className="flex items-center gap-2.5 truncate hover:bg-slate-800/60 p-2 rounded-xl transition-all flex-1 mr-1"
+              className="flex items-center gap-2.5 truncate hover:bg-slate-800/60 p-1.5 rounded-xl transition-all flex-1 mr-1 group"
             >
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center font-bold text-xs text-navy-950 shrink-0 shadow-sm">
-                {user?.email ? user.email.slice(0, 2).toUpperCase() : 'LX'}
+              {/* Instagram-style Story Gradient Ring */}
+              <div className="p-[2px] rounded-full bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-500 group-hover:from-emerald-400 group-hover:via-teal-400 group-hover:to-cyan-400 shrink-0 transition-all shadow-sm">
+                <div className="p-[1.5px] bg-[#0b0f19] rounded-full">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 text-white font-bold text-xs flex items-center justify-center uppercase tracking-wider group-hover:scale-105 transition-transform">
+                    {user?.email ? user.email.slice(0, 2).toUpperCase() : 'AD'}
+                  </div>
+                </div>
               </div>
-              <div className="truncate text-left">
-                <div className="text-xs font-semibold text-white truncate">
-                  {user?.email || 'Luxeenet Retail'}
+              <div className="truncate text-left min-w-0">
+                <div className="text-xs font-semibold text-white truncate flex items-center gap-1">
+                  <span>{user?.email ? user.email.split('@')[0] : 'Luxeenet'}</span>
+                  <span className="text-[10px] text-cyan-400">✓</span>
                 </div>
                 <div className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
-                  <span>{user?.role || 'BUSINESS_OWNER'}</span>
-                  <span className="text-[9px] text-slate-500">&bull; Settings</span>
+                  <span>{user?.role?.replace('_', ' ') || 'SUPER ADMIN'}</span>
                 </div>
               </div>
             </Link>
@@ -567,11 +576,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             <div className="relative" ref={notifRef}>
               <button
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className={`p-2 rounded-xl transition-all relative ${
-                  isNotificationsOpen
+                className={`p-2 rounded-xl transition-all relative ${isNotificationsOpen
                     ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                }`}
+                  }`}
                 title="System Notifications"
               >
                 <Bell className="w-4 h-4" />
@@ -627,9 +635,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                         <div
                           key={item.id}
                           onClick={() => markSingleAsRead(item.id)}
-                          className={`p-3.5 flex items-start gap-3 transition-colors cursor-pointer hover:bg-slate-800/40 ${
-                            item.unread ? 'bg-emerald-500/5' : ''
-                          }`}
+                          className={`p-3.5 flex items-start gap-3 transition-colors cursor-pointer hover:bg-slate-800/40 ${item.unread ? 'bg-emerald-500/5' : ''
+                            }`}
                         >
                           <div className="mt-0.5 shrink-0">
                             {item.type === 'danger' && (
@@ -684,6 +691,96 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                     >
                       View all system audit logs &rarr;
                     </Link>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Instagram-style Professional Circular Profile Icon & Dropdown */}
+            <div className="relative" ref={profileDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                className="group relative flex items-center focus:outline-none ml-1"
+                title="Account & Profile Settings"
+                aria-label="User Profile Menu"
+              >
+                {/* Instagram-style Story Gradient Ring */}
+                <div className="p-[2px] rounded-full bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-500 group-hover:from-emerald-400 group-hover:via-teal-400 group-hover:to-cyan-400 transition-all duration-300 shadow-md group-hover:shadow-emerald-500/20 active:scale-95 cursor-pointer">
+                  <div className="p-[1.5px] bg-[#0b0f19] rounded-full">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-800 via-slate-900 to-navy-950 text-white font-bold text-xs flex items-center justify-center uppercase tracking-wider overflow-hidden ring-1 ring-white/10 group-hover:scale-105 transition-transform">
+                      {user?.email ? user.email.slice(0, 2).toUpperCase() : 'AD'}
+                    </div>
+                  </div>
+                </div>
+                {/* Live Online Status Dot */}
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-[#0b0f19] absolute bottom-0 right-0 animate-pulse" />
+              </button>
+
+              {/* Profile Dropdown Menu */}
+              {isProfileMenuOpen && (
+                <div className="absolute right-0 mt-3 w-64 rounded-2xl bg-[#121927] border border-slate-700 shadow-2xl z-50 overflow-hidden divide-y divide-slate-800/80 animate-fade-in">
+                  <div className="p-3.5 bg-[#0b0f19]/90 flex items-center gap-3">
+                    <div className="p-[2px] rounded-full bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-500 shrink-0">
+                      <div className="p-[1.5px] bg-[#0b0f19] rounded-full">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 text-white font-bold text-sm flex items-center justify-center">
+                          {user?.email ? user.email.slice(0, 2).toUpperCase() : 'AD'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="truncate">
+                      <div className="text-xs font-bold text-white truncate flex items-center gap-1">
+                        <span>{user?.email ? user.email.split('@')[0] : 'Administrator'}</span>
+                        <span className="text-[10px] text-cyan-400">✓</span>
+                      </div>
+                      <div className="text-[10.5px] text-slate-400 truncate font-mono">
+                        {user?.email || 'admin@luxeenet.com'}
+                      </div>
+                      <span className="inline-block mt-1 px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider">
+                        {user?.role?.replace('_', ' ') || 'SUPER ADMIN'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="py-1 text-xs">
+                    <Link
+                      href="/profile"
+                      onClick={() => setIsProfileMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3.5 py-2 text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors"
+                    >
+                      <User className="w-4 h-4 text-emerald-400" />
+                      <span>Profile &amp; Account</span>
+                    </Link>
+                    <Link
+                      href="/profile"
+                      onClick={() => setIsProfileMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3.5 py-2 text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors"
+                    >
+                      <Lock className="w-4 h-4 text-indigo-400" />
+                      <span>Security &amp; Password</span>
+                    </Link>
+                    <Link
+                      href="/audit-logs"
+                      onClick={() => setIsProfileMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3.5 py-2 text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors"
+                    >
+                      <ShieldAlert className="w-4 h-4 text-cyan-400" />
+                      <span>Security Audit Logs</span>
+                    </Link>
+                  </div>
+
+                  <div className="p-1.5 bg-[#0b0f19]/60">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        handleLogout();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 text-xs font-semibold transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Sign Out</span>
+                    </button>
                   </div>
                 </div>
               )}
