@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # HatLock Windows Security — Topmost Lock Screen Overlay Window
 # Developed by Luxeenet for HatLock PRO Universal Fleet Protection
 # ==============================================================================
@@ -14,7 +14,7 @@ $reason = "Scheduled instalment payment defaulted beyond permissible grace perio
 $outstanding = "TZS 150,000"
 $instructions = "Pay via M-Pesa / HatPesa Paybill 552200 or contact your equipment financing branch manager."
 $support = "support@luxeenet.com | +255 700 000 000"
-$deviceDetails = "Lenovo ThinkPad / Financed Workstation"
+$deviceDetails = "Lenovo Workstation"
 $agreementNumber = "HP-2026-001"
 
 if (Test-Path $RestrictionJsonPath) {
@@ -47,12 +47,14 @@ if (Test-Path $RestrictionJsonPath) {
                 Padding="40"
                 BorderBrush="#ef4444"
                 BorderThickness="2"
-                Width="720"
-                Effect="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}">
+                Width="720">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="30" Color="#ef4444" Opacity="0.35" ShadowDepth="0"/>
+            </Border.Effect>
             <StackPanel>
                 <!-- Badge -->
                 <Border Background="#1e293b" CornerRadius="12" Padding="12,6" HorizontalAlignment="Center" Margin="0,0,0,16" BorderBrush="#38bdf8" BorderThickness="1">
-                    <TextBlock Text="🛡️ HATLOCK PRO HARDWARE SECURITY HUB" FontSize="11" FontWeight="Bold" Foreground="#38bdf8" HorizontalAlignment="Center"/>
+                    <TextBlock Text="HATLOCK PRO HARDWARE SECURITY HUB" FontSize="11" FontWeight="Bold" Foreground="#38bdf8" HorizontalAlignment="Center"/>
                 </Border>
 
                 <!-- Title -->
@@ -111,36 +113,41 @@ if (Test-Path $RestrictionJsonPath) {
 </Window>
 "@
 
-$reader = New-Object System.Xml.XmlNodeReader $xaml
-$window = [System.Windows.Markup.XamlReader]::Load($reader)
+try {
+    $reader = New-Object System.Xml.XmlNodeReader $xaml
+    $window = [System.Windows.Markup.XamlReader]::Load($reader)
 
-# Prevent closure while restriction flag exists
-$window.add_Closing({
-    param($sender, $e)
-    if (Test-Path $FlagPath) {
-        $e.Cancel = $true
-    }
-})
+    # Prevent closure while restriction flag exists
+    $window.add_Closing({
+        param($sender, $e)
+        if (Test-Path $FlagPath) {
+            $e.Cancel = $true
+        }
+    })
 
-# Re-focus if deactivated
-$window.add_Deactivated({
-    param($sender, $e)
-    if (Test-Path $FlagPath) {
-        $sender.Topmost = $true
-        $sender.Activate()
-    }
-})
+    # Re-focus if deactivated
+    $window.add_Deactivated({
+        param($sender, $e)
+        if (Test-Path $FlagPath) {
+            $sender.Topmost = $true
+            $sender.Activate()
+        }
+    })
 
-# Background timer checking if restriction was lifted
-$dispatcherTimer = New-Object System.Windows.Threading.DispatcherTimer
-$dispatcherTimer.Interval = [TimeSpan]::FromSeconds(3)
-$dispatcherTimer.add_Tick({
-    if (-not (Test-Path $FlagPath)) {
-        $dispatcherTimer.Stop()
-        $window.Close()
-    }
-})
-$dispatcherTimer.Start()
+    # Background timer checking if restriction was lifted
+    $dispatcherTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $dispatcherTimer.Interval = [TimeSpan]::FromSeconds(3)
+    $dispatcherTimer.add_Tick({
+        if (-not (Test-Path $FlagPath)) {
+            $dispatcherTimer.Stop()
+            $window.Close()
+        }
+    })
+    $dispatcherTimer.Start()
 
-[void]$window.ShowDialog()
-
+    [void]$window.ShowDialog()
+} catch {
+    try {
+        Add-Content -Path (Join-Path $DataDir "lockscreen.err") -Value ("[" + (Get-Date).ToString("o") + "] " + $_.Exception.ToString()) -ErrorAction SilentlyContinue
+    } catch {}
+}

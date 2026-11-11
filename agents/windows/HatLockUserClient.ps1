@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # HatLock Windows Security — Interactive User Session Client Companion
 # Runs in the active user desktop session (Session 1+) to render the lock overlay
 # Solves Session 0 Isolation cleanly across all Windows desktop versions
@@ -12,6 +12,7 @@ $FlagPath = Join-Path $DataDir "restricted.flag"
 $LockScreenScript = Join-Path $InstallDir "HatLockLockScreen.ps1"
 
 $lockProcess = $null
+$lastFailTime = [DateTime]::MinValue
 
 while ($true) {
     try {
@@ -20,10 +21,15 @@ while ($true) {
         if ($isRestricted) {
             # Check if lock process is currently running
             $isProcessAlive = $false
-            if ($lockProcess -and -not $lockProcess.HasExited) {
-                $isProcessAlive = $true
-            } else {
-                # Look for existing interactive lock screen process
+            if ($lockProcess) {
+                try {
+                    if (-not $lockProcess.HasExited) {
+                        $isProcessAlive = $true
+                    }
+                } catch {}
+            }
+
+            if (-not $isProcessAlive) {
                 $existing = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
                     $_.CommandLine -like "*HatLockLockScreen.ps1*"
                 }
@@ -33,13 +39,21 @@ while ($true) {
             }
 
             if (-not $isProcessAlive -and (Test-Path $LockScreenScript)) {
-                # Launch the WPF lock screen directly in this interactive user session
-                $lockProcess = Start-Process "powershell.exe" -ArgumentList "-WindowStyle Normal -ExecutionPolicy Bypass -File `"$LockScreenScript`"" -PassThru -WindowStyle Maximized
+                # Don't spin in a rapid crash loop if it exited immediately
+                $timeSinceLastFail = ([DateTime]::UtcNow - $lastFailTime).TotalSeconds
+                if ($timeSinceLastFail -gt 5) {
+                    $lastFailTime = [DateTime]::UtcNow
+                    $lockProcess = Start-Process "powershell.exe" -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$LockScreenScript`"" -PassThru -WindowStyle Hidden -ErrorAction SilentlyContinue
+                }
             }
         } else {
             # Device is unrestricted — ensure lock screen is dismissed
-            if ($lockProcess -and -not $lockProcess.HasExited) {
-                $lockProcess.Kill()
+            if ($lockProcess) {
+                try {
+                    if (-not $lockProcess.HasExited) {
+                        $lockProcess.Kill()
+                    }
+                } catch {}
                 $lockProcess = $null
             }
 
@@ -47,11 +61,12 @@ while ($true) {
                 $_.CommandLine -like "*HatLockLockScreen.ps1*"
             }
             foreach ($p in $stray) {
-                Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+                try {
+                    Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+                } catch {}
             }
         }
     } catch {}
 
     Start-Sleep -Seconds 3
 }
-
