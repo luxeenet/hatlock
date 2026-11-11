@@ -1131,26 +1131,68 @@ export default function DevicesPage() {
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     <span>Hardware Agent Not Yet Connected</span>
                   </div>
-                  <p className="text-slate-300 text-[11px] leading-relaxed">
-                    The {commandType === 'RESTRICT' ? 'lock' : 'restore'} command will be queued cryptographically. To enforce this directly on the physical {selectedDevice.manufacturer} laptop, run this 1-line command in PowerShell (Run as Administrator):
-                  </p>
-                  <div className="flex items-center gap-2 bg-slate-950 p-2 rounded-lg border border-slate-800">
-                    <code className="text-[10px] text-cyan-300 font-mono flex-1 select-all break-all">
-                      powershell -ExecutionPolicy Bypass -Command &quot;irm {API_BASE}/downloads/windows/install.ps1?deviceId={selectedDevice.id} | iex&quot;
-                    </code>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(`powershell -ExecutionPolicy Bypass -Command "irm ${API_BASE}/downloads/windows/install.ps1?deviceId=${selectedDevice.id} | iex"`);
-                        setCopiedScript(true);
-                        setTimeout(() => setCopiedScript(false), 2500);
-                      }}
-                      className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 shrink-0"
-                      title="Copy 1-line command"
-                    >
-                      {copiedScript ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
+
+                  {selectedDevice.currentOS === 'ANDROID' ? (
+                    <div className="space-y-2">
+                      <p className="text-slate-300 text-[11px] leading-relaxed">
+                        The {commandType === 'RESTRICT' ? 'lock' : 'restore'} command will be queued cryptographically. To connect and enforce this on the Android phone, scan the QR code or tap <strong>1-Click Direct Cloud Enrollment</strong>:
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCommandModalOpen(false);
+                            setProvisioningDevice(selectedDevice);
+                            setAndroidTab('camera');
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
+                          <span>Open Android Enrollment QR & Setup</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : selectedDevice.currentOS === 'IOS' || selectedDevice.currentOS === 'MACOS' ? (
+                    <div className="space-y-2">
+                      <p className="text-slate-300 text-[11px] leading-relaxed">
+                        The command will be queued cryptographically. To enroll this Apple device with Supervised MDM:
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCommandModalOpen(false);
+                          setProvisioningDevice(selectedDevice);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                      >
+                        <QrCode className="w-3.5 h-3.5" />
+                        <span>Open Apple Enrollment Setup</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-slate-300 text-[11px] leading-relaxed">
+                        The {commandType === 'RESTRICT' ? 'lock' : 'restore'} command will be queued cryptographically. To enforce this directly on the physical {selectedDevice.manufacturer} machine, run this 1-line command in PowerShell (Run as Administrator):
+                      </p>
+                      <div className="flex items-center gap-2 bg-slate-950 p-2 rounded-lg border border-slate-800">
+                        <code className="text-[10px] text-cyan-300 font-mono flex-1 select-all break-all">
+                          powershell -ExecutionPolicy Bypass -Command &quot;irm {API_BASE}/downloads/windows/install.ps1?deviceId={selectedDevice.id} | iex&quot;
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`powershell -ExecutionPolicy Bypass -Command "irm ${API_BASE}/downloads/windows/install.ps1?deviceId=${selectedDevice.id} | iex"`);
+                            setCopiedScript(true);
+                            setTimeout(() => setCopiedScript(false), 2500);
+                          }}
+                          className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 shrink-0"
+                          title="Copy 1-line command"
+                        >
+                          {copiedScript ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
